@@ -49,3 +49,28 @@ output "kms_key_arn" {
 output "github_deploy_role_arn" {
   value = module.github_oidc.deploy_role_arn
 }
+
+output "ecr_repository_urls" {
+  value = module.ecr.repository_urls
+}
+
+output "ecs_cluster_name" {
+  value = module.cluster.cluster_name
+}
+
+output "zone_name_servers" {
+  description = "Delegate var.zone_name to these at the parent DNS zone before the first apply completes."
+  value       = module.edge.zone_name_servers
+}
+
+output "hostnames" {
+  value = module.edge.fqdns
+}
+
+output "migrate_task_definition_family" {
+  value = module.api_migrate.task_definition_family
+}
+
+output "alarm_topic_arn" {
+  value = aws_sns_topic.alarms.arn
+}

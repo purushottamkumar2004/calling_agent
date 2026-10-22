@@ -45,9 +45,9 @@ resource "aws_db_instance" "this" {
 
   db_name  = var.db_name
   username = var.db_owner_username
-  # Password generated and rotated by RDS in Secrets Manager; never in Terraform state.
-  manage_master_user_password   = true
-  master_user_secret_kms_key_id = aws_kms_key.data.arn
+  # Generated here (not RDS-managed) so the owner secret can carry a ready-made URL:
+  # the Core API migrate entrypoint reads only MIGRATION_DATABASE_URL.
+  password = random_password.db_owner.result
 
   allocated_storage     = var.db_allocated_storage_gb
   max_allocated_storage = var.db_max_allocated_storage_gb
@@ -74,6 +74,32 @@ resource "aws_db_instance" "this" {
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.name}-postgres-final"
   apply_immediately         = var.apply_immediately
+}
+
+# Schema owner (RDS master user, non-superuser with CREATEROLE). Only the one-off
+# migration task receives this secret, never a running service.
+resource "random_password" "db_owner" {
+  length  = 40
+  special = false # safe inside connection URLs without escaping
+}
+
+resource "aws_secretsmanager_secret" "db_owner" {
+  name                    = "${var.name}/postgres/owner"
+  description             = "Schema owner for migrations only (MIGRATION_DATABASE_URL)"
+  kms_key_id              = aws_kms_key.data.arn
+  recovery_window_in_days = var.secret_recovery_window_days
+}
+
+resource "aws_secretsmanager_secret_version" "db_owner" {
+  secret_id = aws_secretsmanager_secret.db_owner.id
+  secret_string = jsonencode({
+    username = var.db_owner_username
+    password = random_password.db_owner.result
+    host     = aws_db_instance.this.address
+    port     = aws_db_instance.this.port
+    dbname   = var.db_name
+    url      = "postgresql://${var.db_owner_username}:${random_password.db_owner.result}@${aws_db_instance.this.address}:${aws_db_instance.this.port}/${var.db_name}?sslmode=require"
+  })
 }
 
 # Credentials for the running Core API's login role (member of api_app, subject to RLS).

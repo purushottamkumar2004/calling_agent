@@ -54,6 +54,13 @@ jobs:
             echo "Python projects: ${projects}"
           fi
 
+  ignored-sources:
+    name: No source files hidden by .gitignore
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sh infra/scripts/check_ignored.sh
+
   contracts:
     name: Contracts (docs/contracts)
     runs-on: ubuntu-24.04
@@ -203,7 +210,7 @@ jobs:
     # Single required status check for branch protection on main.
     name: CI OK
     if: always()
-    needs: [discover, contracts, compose, opentofu, typescript, python]
+    needs: [discover, ignored-sources, contracts, compose, opentofu, typescript, python]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail if any required job failed or was cancelled

@@ -9,6 +9,7 @@
     "infra:down": "docker compose --env-file .env -f infra/docker/docker-compose.yml --profile obs --profile tunnel down",
     "infra:reset": "docker compose --env-file .env -f infra/docker/docker-compose.yml --profile obs --profile tunnel down -v",
     "infra:logs": "docker compose --env-file .env -f infra/docker/docker-compose.yml logs -f",
-    "contracts:check": "uv run --no-project --with \"jsonschema[format]==4.23.0\" --with \"openapi-spec-validator==0.7.1\" infra/scripts/validate_contracts.py"
+    "contracts:check": "uv run --no-project --with \"jsonschema[format]==4.23.0\" --with \"openapi-spec-validator==0.7.1\" infra/scripts/validate_contracts.py",
+    "check:ignored": "sh infra/scripts/check_ignored.sh"
   }
 }
