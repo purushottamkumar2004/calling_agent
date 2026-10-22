@@ -1,11 +1,12 @@
 # Staging on AWS ap-south-1: plan
 
-Status: **Draft** (chat 08). Two items are open for the Master chat; see [Open decisions](#open-decisions-master-chat).
-Follows `docs/architecture.md` (Infrastructure and scaling; CI; Observability) and ADRs 0004, 0006, 0007.
+Status: **Accepted direction** (chat 08). Follows `docs/architecture.md` and ADRs 0004, 0006, 0007, 0009 (telemetry residency) and 0010 (staging timing, toolchain).
+
+**When:** staging is built in the Pilot stage and must be live before the first clinic is onboarded (end of Phase 2). Phases 1-2 run locally plus CI only (ADR 0010).
 
 ## Principles
 
-1. **Staging mirrors the pilot platform.** The pilot runs on ECS, so staging runs on ECS with the same task definitions, sized down. When production moves to EKS, staging moves first.
+1. **Staging mirrors the pilot platform.** The pilot runs on ECS, so staging runs on ECS with the same task definitions, at minimum size, scaled to zero outside working hours. When production moves to EKS, staging moves first.
 2. **`main` deploys to staging automatically; tags deploy to production** (architecture: Conventions).
 3. **No real patient data in staging.** Synthetic tenants and contacts only, separate Exotel test numbers, separate AI provider keys with spend caps. This keeps staging out of DPDP scope for real data subjects.
 4. **Everything in ap-south-1** (ADR 0004, 0007). Infrastructure as code with Terraform; no click-ops.
@@ -61,7 +62,7 @@ infra/terraform/
 
 | Item | Staging |
 | --- | --- |
-| RDS PostgreSQL 16 | `db.t4g.micro`, single-AZ, 20 GB gp3, KMS-encrypted, 7-day backups, pgvector extension (confirm the RDS minor version ships pgvector 0.8) |
+| RDS PostgreSQL 16 | `db.t4g.micro`, single-AZ, 20 GB gp3, KMS-encrypted, 7-day backups, pgvector extension (confirm the RDS minor version ships pgvector 0.8). The master user (non-superuser, `CREATEROLE`) owns the schema and runs migrations; Terraform creates the service login role in `api_app` with its password in Secrets Manager (same model as local dev and CI) |
 | ElastiCache Redis OSS 7.x | `cache.t4g.micro`, single node, TLS + AUTH, parameter group with `maxmemory-policy noeviction` (BullMQ). Node-based, not Serverless, because Serverless does not let us set the eviction policy |
 | S3 recordings | `calling-agent-staging-recordings-<account>`; Block Public Access on; SSE-KMS; access only via signed expiring URLs; lifecycle: delete after 30 days in staging |
 | Secrets | AWS Secrets Manager (the "managed vault"), injected through ECS `secrets`; non-secret config in SSM Parameter Store. Apps validate env at startup (architecture: Conventions) |
@@ -80,11 +81,14 @@ On merge to `main`:
 
 Production (by tag, evaluation suite as a gate) reuses the same pipeline against the prod account.
 
-## Observability (staging)
+## Observability (staging, ADR 0009)
 
-- Logs: JSON to CloudWatch Logs, 14-day retention, every line with `tenant_id` and `call_id` (architecture).
+- Logs, metrics and traces stay in ap-south-1. Services emit OpenTelemetry (OTLP) to an ADOT/OTel collector sidecar per task.
+- Backend in Mumbai. Recommended for staging: CloudWatch Logs (JSON, 14-day retention, every line with `tenant_id` and `call_id`) plus X-Ray traces and CloudWatch metrics through the collector, with Grafana on top for dashboards. A self-hosted Grafana/Loki/Tempo stack stays an option if CloudWatch costs or query limits bite; switching is a collector config change.
+- Error tracking: hosted Sentry for stack traces only, with mandatory scrubbing (`send_default_pii=false`; no bodies, transcripts, phones or recording keys; only `tenant_id`, `call_id`, `agent_version`). DSN in Secrets Manager. Moving to self-hosted Sentry in ap-south-1 is a DSN change.
 - Infra alarms (CloudWatch -> SNS -> email/Slack): ALB 5xx, unhealthy targets, ECS running task count, RDS CPU/storage/connections, Redis memory and connections, NAT errors.
-- Traces, metrics and error tracking: **blocked on open decision 1.** Services emit OpenTelemetry (OTLP) either way, so the backend can be chosen without code changes. App alerts from the architecture (p95 latency over target, call failure rate, provider errors, worker capacity) are wired once the backend is chosen.
+- App alerts from the architecture: p95 turn latency over target, call failure rate, provider errors, worker capacity.
+- Before the pilot: legal confirmation that scrubbed, ID-only error events abroad are acceptable under DPDP (ADR 0009 consequence).
 
 ## Rough cost (always on)
 
@@ -106,15 +110,7 @@ Scaling ECS services to zero outside working hours cuts the Fargate line by roug
 
 | From | What |
 | --- | --- |
-| 01 Core API | A migrate command runnable as a one-off task; `/health` endpoint |
+| 01 Core API | `/health` and `db:migrate` exist; need a migrate entrypoint that runs from the built image without `tsx` or a `.env` file (env vars only), for the one-off migration task |
 | 02 Voice Gateway | `/health`; reads worker capacity from Redis by private IP |
 | 03 Voice Worker | Toggle ECS task scale-in protection around active calls; `SIGTERM` = stop taking new calls |
 | All apps | Follow the CI contract in `infra/README.md`; Dockerfile-ready start command; config only via env vars |
-
-## Open decisions (Master chat)
-
-1. **Error tracking and telemetry vs. Indian-region hosting.** The architecture says "Sentry everywhere" and Grafana, while ADR 0004 says all services and data stay in India. Sentry's hosted service offers US and EU data regions; I am not aware of an India region (worth confirming). Stack traces and spans can carry phone numbers or transcript fragments. Options:
-   - (a) Hosted Sentry and Grafana Cloud with strict PII scrubbing, recorded as an explicit ADR exception to 0004.
-   - (b) Self-host in ap-south-1: a Sentry-compatible tracker (e.g. GlitchTip, which accepts Sentry SDKs) plus Grafana with Tempo/Loki/Prometheus.
-   - (c) AWS-native in ap-south-1: CloudWatch + X-Ray via the ADOT collector, Grafana on top.
-2. **When staging exists.** The infra table lists "staging environment" under the Production (EKS) stage, but CI and Conventions say `main` deploys to staging from the start. This plan assumes staging exists from the Pilot stage, on ECS. Please confirm and update the doc wording.

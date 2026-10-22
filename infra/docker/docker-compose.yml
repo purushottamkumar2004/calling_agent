@@ -15,9 +15,15 @@ services:
     # Pinned to the pgvector release we target on RDS (Postgres 16 + pgvector 0.8).
     image: pgvector/pgvector:0.8.0-pg16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-calling_agent}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
-      POSTGRES_DB: ${POSTGRES_DB:-calling_agent}
+      # Container superuser: local admin only, never used by apps (like the RDS admin).
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:-postgres_local}
+      POSTGRES_DB: postgres
+      # Schema owner used by Core API migrations: NOT a superuser, as on RDS (init script).
+      APP_DB_OWNER: ${POSTGRES_USER:-calling_agent}
+      APP_DB_OWNER_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      APP_DB: ${POSTGRES_DB:-calling_agent}
+      APP_TEST_DB: ${POSTGRES_TEST_DB:-calling_agent_test}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -25,10 +31,12 @@ services:
       # Runs only when the volume is empty. After changing, run: pnpm infra:reset
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      # TCP check: during init the server listens on the socket only, so this stays
+      # unhealthy until the init scripts (roles, databases) have finished.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
     restart: unless-stopped
 
   redis:
