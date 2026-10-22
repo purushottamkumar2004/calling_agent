@@ -1,0 +1,6 @@
+packages:
+  - "apps/web"
+  - "apps/api"
+  - "apps/scheduler"
+  - "packages/shared-types"
+  - "packages/agent-templates"
