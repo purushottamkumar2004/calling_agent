@@ -41,7 +41,7 @@ module "data" {
   db_multi_az                = false
   db_deletion_protection     = true
   redis_node_type            = "cache.t4g.micro"
-  recordings_expiration_days = 30 # staging holds synthetic data only
+  recordings_expiration_days = 90 # ADR 0012: lifecycle matches the 90-day platform ceiling
 }
 
 module "github_oidc" {

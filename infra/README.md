@@ -6,10 +6,10 @@ Source of truth: [`docs/architecture.md`](../docs/architecture.md) (Infrastructu
 | Path | What |
 | --- | --- |
 | [`docker/`](docker/README.md) | Local dev stack (Postgres + pgvector, Redis, MinIO; optional observability and ngrok) |
-| [`terraform/`](terraform/README.md) | AWS ap-south-1. Start with the [staging plan](terraform/staging-plan.md) |
+| [`terraform/`](terraform/README.md) | AWS ap-south-1 with OpenTofu (ADR 0012). Start with the [staging plan](terraform/staging-plan.md) |
 | [`k8s/`](k8s/README.md) | Production on EKS (later) |
 | [`scripts/`](scripts/) | CI helpers, e.g. `validate_contracts.py` |
-| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, type-check, test (TypeScript + Python), contract and compose checks |
+| [`../.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint, type-check, build, test (TypeScript + Python); contract, compose and OpenTofu checks |
 
 ## CI contract (ADR 0010)
 

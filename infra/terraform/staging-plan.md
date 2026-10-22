@@ -1,6 +1,6 @@
 # Staging on AWS ap-south-1: plan
 
-Status: **Accepted direction** (chat 08). Follows `docs/architecture.md` and ADRs 0004, 0006, 0007, 0009 (telemetry residency) and 0010 (staging timing, toolchain).
+Status: **Accepted direction** (chat 08). Follows `docs/architecture.md` and ADRs 0004, 0006, 0007, 0009 (telemetry residency), 0010 (staging timing, toolchain) and 0012 (OpenTofu, 90-day recording ceiling).
 
 **When:** staging is built in the Pilot stage and must be live before the first clinic is onboarded (end of Phase 2). Phases 1-2 run locally plus CI only (ADR 0010).
 
@@ -9,13 +9,13 @@ Status: **Accepted direction** (chat 08). Follows `docs/architecture.md` and ADR
 1. **Staging mirrors the pilot platform.** The pilot runs on ECS, so staging runs on ECS with the same task definitions, at minimum size, scaled to zero outside working hours. When production moves to EKS, staging moves first.
 2. **`main` deploys to staging automatically; tags deploy to production** (architecture: Conventions).
 3. **No real patient data in staging.** Synthetic tenants and contacts only, separate Exotel test numbers, separate AI provider keys with spend caps. This keeps staging out of DPDP scope for real data subjects.
-4. **Everything in ap-south-1** (ADR 0004, 0007). Infrastructure as code with Terraform; no click-ops.
+4. **Everything in ap-south-1** (ADR 0004, 0007). Infrastructure as code with OpenTofu (ADR 0012); no click-ops.
 5. **No long-lived AWS keys.** GitHub Actions assumes an IAM role through OIDC.
 
 ## Accounts and Terraform layout
 
 - AWS Organizations with separate accounts: `calling-agent-staging` and `calling-agent-prod` (blast-radius and cost isolation, clean IAM). A `shared` account is not needed yet.
-- Terraform >= 1.10, state in S3 per account with native lockfile locking (`use_lockfile = true`), encrypted, versioned.
+- OpenTofu 1.12.9 (pinned, ADR 0012), state in S3 per account with native lockfile locking (`use_lockfile = true`), encrypted, versioned.
 
 ```
 infra/terraform/
@@ -65,7 +65,7 @@ infra/terraform/
 | --- | --- |
 | RDS PostgreSQL 16 | `db.t4g.micro`, single-AZ, 20 GB gp3, KMS-encrypted, 7-day backups, pgvector extension (confirm the RDS minor version ships pgvector 0.8). The master user (non-superuser, `CREATEROLE`) owns the schema and runs migrations; Terraform creates the service login role in `api_app` with its password in Secrets Manager (same model as local dev and CI) |
 | ElastiCache Redis OSS 7.x | `cache.t4g.micro`, single node, TLS + AUTH, parameter group with `maxmemory-policy noeviction` (BullMQ). Node-based, not Serverless, because Serverless does not let us set the eviction policy |
-| S3 recordings | `calling-agent-staging-recordings-<account>`; Block Public Access on; SSE-KMS; access only via signed expiring URLs; lifecycle: delete after 30 days in staging |
+| S3 recordings | `calling-agent-staging-recordings-<account>`; Block Public Access on; SSE-KMS; access only via signed expiring URLs; lifecycle: delete after 90 days, the platform ceiling (ADR 0012) |
 | Secrets | AWS Secrets Manager (the "managed vault"), injected through ECS `secrets`; non-secret config in SSM Parameter Store. Apps validate env at startup (architecture: Conventions) |
 
 **Migrations** run as a one-off ECS task (`api` image, command `node dist/scripts/migrate.js`, reading `MIGRATION_DATABASE_URL` from the owner secret), triggered by a separate CI job that needs approval in the GitHub Environment `staging-migrations`, before the services roll. This is the "separate reviewed step" from the architecture.

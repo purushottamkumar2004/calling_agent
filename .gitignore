@@ -29,6 +29,8 @@ venv/
 *.wav
 *.mp3
 data/
+# ...but not source directories that happen to be named data
+!infra/terraform/modules/data/
 
 # Infra
 .terraform/
