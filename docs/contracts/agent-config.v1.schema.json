@@ -334,7 +334,10 @@
         },
         "retention_days": {
           "type": "integer",
-          "default": 90
+          "default": 90,
+          "minimum": 1,
+          "maximum": 90,
+          "description": "Platform ceiling 90 days (ADR 0012); shorter values enforced by the Post-call Worker"
         }
       }
     },
