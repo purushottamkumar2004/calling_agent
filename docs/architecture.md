@@ -90,7 +90,7 @@ Every business table carries `tenant_id`, enforced with Postgres row-level secur
 | User | id, tenant_id, email, role | owner, admin, staff |
 | Location | id, tenant_id, address, timezone, hours | Clinic branches |
 | Provider | id, tenant_id, location_id, name, specialty | Doctor or bookable resource |
-| Slot | id, provider_id, start, end, status | Unique on provider + start |
+| Slot | id, tenant_id, provider_id, start, end, status | Unique on provider + start; tenant_id for RLS (ADR 0011) |
 | Contact | id, tenant_id, phone, name, language, consent flags | Phone encrypted |
 | Appointment | id, tenant_id, contact_id, slot_id, status, source | call, dashboard, import |
 | PhoneNumber | id, tenant_id, number, provider, agent_id | Inbound number to agent |

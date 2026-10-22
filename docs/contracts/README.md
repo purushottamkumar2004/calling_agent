@@ -8,6 +8,8 @@ Frozen interfaces between services. Changing any of these requires a Master-chat
 | Event envelope | [`events/envelope.schema.json`](events/envelope.schema.json) | all | all |
 | `call.ended` v1 | [`events/call.ended.v1.schema.json`](events/call.ended.v1.schema.json) | Voice Worker | Post-call Worker, Core API |
 | `appointment.booked` v1 | [`events/appointment.booked.v1.schema.json`](events/appointment.booked.v1.schema.json) | Core API | Scheduler and Notifier |
+| `appointment.rescheduled` v1 | [`events/appointment.rescheduled.v1.schema.json`](events/appointment.rescheduled.v1.schema.json) | Core API | Scheduler and Notifier |
+| `appointment.cancelled` v1 | [`events/appointment.cancelled.v1.schema.json`](events/appointment.cancelled.v1.schema.json) | Core API | Scheduler and Notifier |
 | Agent config v1 | [`agent-config.v1.schema.json`](agent-config.v1.schema.json) | Core API | Voice Worker |
 
 Examples live in [`examples/`](examples/).
@@ -15,11 +17,11 @@ Examples live in [`examples/`](examples/).
 ## Rules
 
 1. **Voice Worker never touches the database.** Every tool call is an HTTP request to `/internal/v1` on the Core API.
-2. **Auth between services:** short-lived service JWT in `Authorization: Bearer`, plus `X-Tenant-Id` and `X-Call-Id` headers on every call-scoped request. The Core API rejects a request whose tenant does not own the call.
+2. **Auth between services:** short-lived service JWT in `Authorization: Bearer` (claims and keys per ADR 0011), plus `X-Tenant-Id` and `X-Call-Id` headers on every call-scoped request. The Core API rejects a request whose tenant does not own the call.
 3. **Idempotency:** every write takes an `Idempotency-Key` header (the Voice Worker uses `{call_id}:{tool_call_id}`), so a retried tool call never double-books.
 4. **Latency SLO:** tool endpoints p95 under 300 ms. The Voice Worker times out at 2 s and plays a filler line after 1 s.
 5. **Errors:** always `{"error": {"code", "message", "details"}}` with a stable `code` the LLM tool layer can map to a spoken reply.
-6. **Events:** Redis Streams, stream `events:{domain}` (e.g. `events:call`), every message wrapped in the envelope. Consumers must be idempotent on `event_id`.
+6. **Events:** Redis Streams, stream `events:{domain}` (e.g. `events:call`); each entry has one field, `envelope`, holding the JSON envelope (ADR 0011). Consumers must be idempotent on `event_id`.
 7. **Agent config is a snapshot:** the Voice Worker receives the full config for one `version` at call start and never re-reads it mid-call. The `Call` row stores that version.
 8. **Times** are ISO-8601 UTC; **phones** are E.164 (`+919876543210`); **languages** are BCP-47 (`en-IN`, `hi-IN`).
 

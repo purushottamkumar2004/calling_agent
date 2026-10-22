@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calling-agent/contracts/events/appointment.rescheduled.v1.schema.json",
+  "title": "appointment.rescheduled payload (v1)",
+  "description": "Emitted by the Core API after a reschedule commits. Same appointment_id, new slot. Stream: events:appointment. The Scheduler cancels reminders for previous_slot and schedules new ones.",
+  "type": "object",
+  "required": ["appointment_id", "contact_id", "phone", "previous_slot", "slot", "source"],
+  "additionalProperties": false,
+  "$defs": {
+    "slot": {
+      "type": "object",
+      "required": ["provider_name", "start", "end", "timezone"],
+      "properties": {
+        "slot_id": { "type": "string", "format": "uuid" },
+        "provider_id": { "type": "string", "format": "uuid" },
+        "provider_name": { "type": "string" },
+        "location_name": { "type": "string" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "timezone": { "type": "string" }
+      }
+    }
+  },
+  "properties": {
+    "appointment_id": { "type": "string", "format": "uuid" },
+    "contact_id": { "type": "string", "format": "uuid" },
+    "phone": { "type": "string", "pattern": "^\\+[1-9][0-9]{7,14}$" },
+    "contact_name": { "type": ["string", "null"] },
+    "language": { "type": "string", "enum": ["en-IN", "hi-IN"] },
+    "previous_slot": { "$ref": "#/$defs/slot" },
+    "slot": { "$ref": "#/$defs/slot" },
+    "source": { "type": "string", "enum": ["call", "dashboard", "import"] },
+    "consent_whatsapp": { "type": "boolean" }
+  }
+}

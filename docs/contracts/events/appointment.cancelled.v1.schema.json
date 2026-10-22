@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calling-agent/contracts/events/appointment.cancelled.v1.schema.json",
+  "title": "appointment.cancelled payload (v1)",
+  "description": "Emitted by the Core API after a cancellation commits. Stream: events:appointment. The Scheduler cancels pending reminders and may send a cancellation confirmation.",
+  "type": "object",
+  "required": ["appointment_id", "contact_id", "phone", "slot", "source", "cancelled_by"],
+  "additionalProperties": false,
+  "properties": {
+    "appointment_id": { "type": "string", "format": "uuid" },
+    "contact_id": { "type": "string", "format": "uuid" },
+    "phone": { "type": "string", "pattern": "^\\+[1-9][0-9]{7,14}$" },
+    "contact_name": { "type": ["string", "null"] },
+    "language": { "type": "string", "enum": ["en-IN", "hi-IN"] },
+    "slot": {
+      "type": "object",
+      "required": ["provider_name", "start", "end", "timezone"],
+      "properties": {
+        "slot_id": { "type": "string", "format": "uuid" },
+        "provider_id": { "type": "string", "format": "uuid" },
+        "provider_name": { "type": "string" },
+        "location_name": { "type": "string" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "timezone": { "type": "string" }
+      }
+    },
+    "source": { "type": "string", "enum": ["call", "dashboard", "import"] },
+    "cancelled_by": { "type": "string", "enum": ["caller", "staff", "system"] },
+    "reason": { "type": ["string", "null"], "maxLength": 300 },
+    "consent_whatsapp": { "type": "boolean" }
+  }
+}
