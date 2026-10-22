@@ -31,7 +31,7 @@ jobs:
       python_projects: ${{ steps.python.outputs.projects }}
       has_python: ${{ steps.python.outputs.has_python }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - id: node
         run: |
@@ -58,7 +58,7 @@ jobs:
     name: Contracts (docs/contracts)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
       - name: Validate schemas, OpenAPI spec and examples
         run: >
@@ -71,7 +71,7 @@ jobs:
     name: Compose config
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Validate docker-compose.yml (all profiles)
         run: docker compose -f infra/docker/docker-compose.yml --profile obs --profile tunnel config --quiet
 
@@ -104,7 +104,7 @@ jobs:
       TEST_DATABASE_URL: postgresql://calling_agent:ci_only_password@localhost:5432/calling_agent_test
       TEST_REDIS_URL: redis://localhost:6379/15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4 # version from "packageManager" in package.json
       - uses: actions/setup-node@v4
         with:
@@ -149,7 +149,7 @@ jobs:
       CI: "true"
       REDIS_URL: redis://localhost:6379/15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -165,41 +165,45 @@ jobs:
       - name: Test
         run: make test APP=${{ matrix.project }}
 
-  terraform:
-    name: Terraform (fmt, validate, offline plan tests)
+  opentofu:
+    name: OpenTofu (fmt, validate, offline plan tests)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       TF_IN_AUTOMATION: "true"
-      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.tf-plugin-cache
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.tofu-plugin-cache
     defaults:
       run:
         working-directory: infra/terraform
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      # ADR 0012: OpenTofu everywhere, pinned. Keep in sync with infra/terraform/README.md.
+      - uses: opentofu/setup-opentofu@v1
         with:
-          terraform_version: "~1.12.0"
-          terraform_wrapper: false
+          tofu_version: 1.12.9
+          tofu_wrapper: false
       - run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
       - name: Format
-        run: terraform fmt -check -recursive -diff
+        run: tofu fmt -check -recursive -diff
       - name: Validate roots (no backend, no AWS credentials)
         run: |
           for root in bootstrap envs/staging; do
             echo "::group::$root"
-            terraform -chdir="$root" init -backend=false -input=false
-            terraform -chdir="$root" validate
+            # Once a root commits .terraform.lock.hcl (ADR 0012), CI fails if it is out of date.
+            lock_flag=""
+            if [ -f "$root/.terraform.lock.hcl" ]; then lock_flag="-lockfile=readonly"; fi
+            tofu -chdir="$root" init -backend=false -input=false $lock_flag
+            tofu -chdir="$root" validate
             echo "::endgroup::"
           done
       - name: Offline plan tests (mocked providers)
-        run: terraform -chdir=envs/staging test
+        run: tofu -chdir=envs/staging test
 
   ci-ok:
     # Single required status check for branch protection on main.
     name: CI OK
     if: always()
-    needs: [discover, contracts, compose, terraform, typescript, python]
+    needs: [discover, contracts, compose, opentofu, typescript, python]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail if any required job failed or was cancelled

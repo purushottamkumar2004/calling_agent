@@ -1,5 +1,5 @@
 # Offline plan of the staging root with mocked providers (no AWS credentials needed).
-# Runs in CI: terraform test. Asserts the properties the architecture and ADRs depend on.
+# Runs in CI: tofu test. Asserts the properties the architecture and ADRs depend on.
 
 # Mocks return random strings; give ARN- and JSON-shaped defaults where the provider validates them.
 mock_provider "aws" {
@@ -75,6 +75,10 @@ run "data_layer" {
   assert {
     condition     = module.data.recordings_bucket == "calling-agent-staging-recordings-123456789012"
     error_message = "Recordings bucket name must be account-scoped."
+  }
+  assert {
+    condition     = module.data.recordings_expiration_days == 90
+    error_message = "Recordings expire at the 90-day platform ceiling (ADR 0012)."
   }
 }
 
