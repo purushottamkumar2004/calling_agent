@@ -1,0 +1,189 @@
+# CI: lint, type-check and test for TypeScript and Python (architecture.md: CI).
+# Image builds and the staging deploy on merge to main come in a later workflow.
+#
+# Conventions this workflow relies on (see infra/README.md, "CI contract"):
+#   TypeScript: each workspace package may define `lint`, `typecheck`, `test` scripts.
+#   Python:     each apps/* or packages/* dir with a pyproject.toml is a project;
+#               ruff, mypy and pytest are in its `dev` dependency group (uv).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+  UV_PYTHON: "3.12"
+
+jobs:
+  discover:
+    name: Discover projects
+    runs-on: ubuntu-24.04
+    outputs:
+      has_node: ${{ steps.node.outputs.has_node }}
+      python_projects: ${{ steps.python.outputs.projects }}
+      has_python: ${{ steps.python.outputs.has_python }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: node
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "has_node=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_node=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No pnpm-lock.yaml yet; TypeScript checks skipped."
+          fi
+
+      - id: python
+        run: |
+          projects=$(find apps packages -mindepth 2 -maxdepth 2 -name pyproject.toml -printf '%h\n' 2>/dev/null | sort | jq -R . | jq -sc .)
+          echo "projects=${projects}" >> "$GITHUB_OUTPUT"
+          if [ "${projects}" = "[]" ]; then
+            echo "has_python=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Python projects yet; Python checks skipped."
+          else
+            echo "has_python=true" >> "$GITHUB_OUTPUT"
+            echo "Python projects: ${projects}"
+          fi
+
+  contracts:
+    name: Contracts (docs/contracts)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Validate schemas, OpenAPI spec and examples
+        run: >
+          uv run --no-project --python "${PYTHON_VERSION}"
+          --with "jsonschema[format]==4.23.0"
+          --with "openapi-spec-validator==0.7.1"
+          infra/scripts/validate_contracts.py
+
+  compose:
+    name: Compose config
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate docker-compose.yml (all profiles)
+        run: docker compose -f infra/docker/docker-compose.yml --profile obs --profile tunnel config --quiet
+
+  typescript:
+    name: TypeScript (lint, typecheck, test)
+    needs: discover
+    if: needs.discover.outputs.has_node == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_USER: calling_agent
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: calling_agent_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U calling_agent"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      CI: "true"
+      NODE_ENV: test
+      DATABASE_URL: postgresql://calling_agent:ci_only_password@localhost:5432/calling_agent_test
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version from "packageManager" in package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Enable pgvector in the test database
+        run: psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
+      - name: Lint
+        run: pnpm -r run --if-present lint
+      - name: Type-check
+        run: pnpm -r run --if-present typecheck
+      - name: Test
+        run: pnpm -r run --if-present test
+
+  python:
+    name: Python ${{ matrix.project }}
+    needs: discover
+    if: needs.discover.outputs.has_python == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.discover.outputs.python_projects) }}
+    services:
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: ${{ matrix.project }}
+    env:
+      CI: "true"
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install
+        run: |
+          if [ -f uv.lock ] || [ -f ../../uv.lock ]; then
+            uv sync --locked --all-groups
+          else
+            echo "::warning::${{ matrix.project }} has no uv.lock; resolving fresh. Commit a lockfile."
+            uv sync --all-groups
+          fi
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format
+        run: uv run ruff format --check .
+      - name: Mypy
+        run: uv run mypy .
+      - name: Pytest
+        run: |
+          set +e
+          uv run pytest
+          code=$?
+          if [ "$code" -eq 5 ]; then
+            echo "::notice::${{ matrix.project }}: no tests collected yet."
+            exit 0
+          fi
+          exit "$code"
+
+  ci-ok:
+    # Single required status check for branch protection on main.
+    name: CI OK
+    if: always()
+    needs: [discover, contracts, compose, typescript, python]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail if any required job failed or was cancelled
+        run: |
+          echo '${{ toJSON(needs) }}' | jq -e 'to_entries | all(.value.result == "success" or .value.result == "skipped")'
