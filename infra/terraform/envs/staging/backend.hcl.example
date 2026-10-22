@@ -1,0 +1,3 @@
+# cp backend.hcl.example backend.hcl, then: terraform init -backend-config=backend.hcl
+# The bucket name is the `state_bucket` output of infra/terraform/bootstrap.
+bucket = "calling-agent-tfstate-<staging-account-id>"

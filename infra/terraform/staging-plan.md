@@ -19,15 +19,16 @@ Status: **Accepted direction** (chat 08). Follows `docs/architecture.md` and ADR
 
 ```
 infra/terraform/
+  bootstrap/        # state bucket, once per account   (written)
   modules/
-    network/        # VPC, subnets, NAT, endpoints
-    data/           # RDS, ElastiCache, S3 recordings bucket, KMS
+    network/        # VPC, subnets, NAT, endpoints      (written)
+    data/           # RDS, ElastiCache, S3 recordings bucket, KMS   (written)
     ecs-cluster/    # cluster, Cloud Map namespace, log groups
     ecs-service/    # one module, used for each app
     edge/           # ALBs, ACM, Route 53
-    ci-oidc/        # GitHub OIDC provider + deploy role
+    github-oidc/    # GitHub OIDC provider + deploy role   (written)
   envs/
-    staging/        # composes modules; staging sizes
+    staging/        # composes modules; staging sizes  (network, data, OIDC written)
     prod/           # later
 ```
 
@@ -67,7 +68,7 @@ infra/terraform/
 | S3 recordings | `calling-agent-staging-recordings-<account>`; Block Public Access on; SSE-KMS; access only via signed expiring URLs; lifecycle: delete after 30 days in staging |
 | Secrets | AWS Secrets Manager (the "managed vault"), injected through ECS `secrets`; non-secret config in SSM Parameter Store. Apps validate env at startup (architecture: Conventions) |
 
-**Migrations** run as a one-off ECS task (`api` image, migrate command), triggered by a separate CI job that needs approval in the GitHub Environment `staging-migrations`, before the services roll. This is the "separate reviewed step" from the architecture.
+**Migrations** run as a one-off ECS task (`api` image, command `node dist/scripts/migrate.js`, reading `MIGRATION_DATABASE_URL` from the owner secret), triggered by a separate CI job that needs approval in the GitHub Environment `staging-migrations`, before the services roll. This is the "separate reviewed step" from the architecture.
 
 ## CI/CD to staging (next workflow, after CI)
 
@@ -110,7 +111,7 @@ Scaling ECS services to zero outside working hours cuts the Fargate line by roug
 
 | From | What |
 | --- | --- |
-| 01 Core API | `/health` and `db:migrate` exist; need a migrate entrypoint that runs from the built image without `tsx` or a `.env` file (env vars only), for the one-off migration task |
+| 01 Core API | `node dist/scripts/migrate.js` reading `MIGRATION_DATABASE_URL` from env (routed by Master). Note: the RDS-managed owner secret is JSON (`username`, `password`), not a URL, and rotates; ECS injects JSON keys as separate env vars. So migrate.js should also accept standard `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` (+ `PGSSLMODE=require`) when `MIGRATION_DATABASE_URL` is unset. Also a production-safe version of `db:setup-local-role` for the one-off role task |
 | 02 Voice Gateway | `/health`; reads worker capacity from Redis by private IP |
 | 03 Voice Worker | Toggle ECS task scale-in protection around active calls; `SIGTERM` = stop taking new calls |
-| All apps | Follow the CI contract in `infra/README.md`; Dockerfile-ready start command; config only via env vars |
+| All apps | Follow the CI contract in `infra/README.md`; Dockerfile-ready start command; config only via env vars. In AWS: Postgres needs `sslmode=require`, Redis URLs are `rediss://` (TLS + AUTH) |

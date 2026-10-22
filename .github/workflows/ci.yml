@@ -165,11 +165,41 @@ jobs:
       - name: Test
         run: make test APP=${{ matrix.project }}
 
+  terraform:
+    name: Terraform (fmt, validate, offline plan tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.tf-plugin-cache
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.12.0"
+          terraform_wrapper: false
+      - run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
+      - name: Format
+        run: terraform fmt -check -recursive -diff
+      - name: Validate roots (no backend, no AWS credentials)
+        run: |
+          for root in bootstrap envs/staging; do
+            echo "::group::$root"
+            terraform -chdir="$root" init -backend=false -input=false
+            terraform -chdir="$root" validate
+            echo "::endgroup::"
+          done
+      - name: Offline plan tests (mocked providers)
+        run: terraform -chdir=envs/staging test
+
   ci-ok:
     # Single required status check for branch protection on main.
     name: CI OK
     if: always()
-    needs: [discover, contracts, compose, typescript, python]
+    needs: [discover, contracts, compose, terraform, typescript, python]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail if any required job failed or was cancelled

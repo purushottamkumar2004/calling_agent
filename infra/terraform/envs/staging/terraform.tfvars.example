@@ -1,0 +1,2 @@
+# cp terraform.tfvars.example terraform.tfvars (gitignored). No secrets belong here.
+aws_account_id = "<staging-account-id>"
