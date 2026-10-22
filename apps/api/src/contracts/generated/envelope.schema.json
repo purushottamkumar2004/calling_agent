@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calling-agent/contracts/events/envelope.schema.json",
+  "title": "Event envelope",
+  "type": "object",
+  "required": ["event_id", "event_type", "schema_version", "occurred_at", "producer", "tenant_id", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid", "description": "Consumers dedupe on this" },
+    "event_type": { "type": "string", "pattern": "^[a-z_]+\\.[a-z_]+$", "examples": ["call.ended", "appointment.booked"] },
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "producer": { "type": "string", "enum": ["api", "voice-gateway", "voice-worker", "postcall-worker", "scheduler"] },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "call_id": { "type": ["string", "null"], "format": "uuid" },
+    "trace_id": { "type": ["string", "null"], "description": "OpenTelemetry trace id" },
+    "payload": { "type": "object" }
+  }
+}
