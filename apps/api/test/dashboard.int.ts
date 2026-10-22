@@ -15,7 +15,10 @@ describe('dashboard auth and scheduling API', () => {
 
   describe('auth', () => {
     it('logs in, exposes /me, and rejects bad credentials uniformly', async () => {
-      const ok = await ctx.http().post('/v1/auth/login').send({ email: f.users.admin.email.toUpperCase(), password: f.users.admin.password });
+      const ok = await ctx
+        .http()
+        .post('/v1/auth/login')
+        .send({ email: f.users.admin.email.toUpperCase(), password: f.users.admin.password });
       expect(ok.status).toBe(200);
       expect(ok.body).toMatchObject({ token_type: 'Bearer', expires_in: 900 });
       const me = await ctx.http().get('/v1/auth/me').set('Authorization', `Bearer ${ok.body.access_token}`);
@@ -29,7 +32,10 @@ describe('dashboard auth and scheduling API', () => {
     });
 
     it('rotates refresh tokens and revokes the family on reuse', async () => {
-      const login = await ctx.http().post('/v1/auth/login').send({ email: f.users.staff.email, password: f.users.staff.password });
+      const login = await ctx
+        .http()
+        .post('/v1/auth/login')
+        .send({ email: f.users.staff.email, password: f.users.staff.password });
       const r1 = login.body.refresh_token;
       const refreshed = await ctx.http().post('/v1/auth/refresh').send({ refresh_token: r1 });
       expect(refreshed.status).toBe(200);
@@ -43,19 +49,32 @@ describe('dashboard auth and scheduling API', () => {
     });
 
     it('logout revokes the refresh token', async () => {
-      const login = await ctx.http().post('/v1/auth/login').send({ email: f.users.owner.email, password: f.users.owner.password });
-      expect((await ctx.http().post('/v1/auth/logout').send({ refresh_token: login.body.refresh_token })).status).toBe(204);
-      expect((await ctx.http().post('/v1/auth/refresh').send({ refresh_token: login.body.refresh_token })).status).toBe(401);
+      const login = await ctx
+        .http()
+        .post('/v1/auth/login')
+        .send({ email: f.users.owner.email, password: f.users.owner.password });
+      expect((await ctx.http().post('/v1/auth/logout').send({ refresh_token: login.body.refresh_token })).status).toBe(
+        204,
+      );
+      expect((await ctx.http().post('/v1/auth/refresh').send({ refresh_token: login.body.refresh_token })).status).toBe(
+        401,
+      );
     });
 
     it('rejects disabled users', async () => {
       await ctx.owner.query(`UPDATE users SET status = 'disabled' WHERE id = $1`, [other.users.staff.id]);
-      const res = await ctx.http().post('/v1/auth/login').send({ email: other.users.staff.email, password: other.users.staff.password });
+      const res = await ctx
+        .http()
+        .post('/v1/auth/login')
+        .send({ email: other.users.staff.email, password: other.users.staff.password });
       expect(res.status).toBe(401);
     });
 
     it('rejects service tokens on dashboard routes', async () => {
-      const res = await ctx.http().get('/v1/auth/me').set('Authorization', `Bearer ${await ctx.jwt.signServiceToken('voice-worker')}`);
+      const res = await ctx
+        .http()
+        .get('/v1/auth/me')
+        .set('Authorization', `Bearer ${await ctx.jwt.signServiceToken('voice-worker')}`);
       expect(res.status).toBe(401);
     });
   });
@@ -68,12 +87,22 @@ describe('dashboard auth and scheduling API', () => {
     };
 
     it('lets owners/admins create slots and forbids staff', async () => {
-      const body = { slots: [{ provider_id: f.provider2Id, start: later(1, 5).toISOString(), end: later(1, 6).toISOString() }] };
-      const staff = await ctx.http().post('/v1/slots').set('Authorization', `Bearer ${await userToken(ctx, f, 'staff')}`).send(body);
+      const body = {
+        slots: [{ provider_id: f.provider2Id, start: later(1, 5).toISOString(), end: later(1, 6).toISOString() }],
+      };
+      const staff = await ctx
+        .http()
+        .post('/v1/slots')
+        .set('Authorization', `Bearer ${await userToken(ctx, f, 'staff')}`)
+        .send(body);
       expect(staff.status).toBe(403);
       expect(staff.body.error.code).toBe('FORBIDDEN');
 
-      const admin = await ctx.http().post('/v1/slots').set('Authorization', `Bearer ${await userToken(ctx, f, 'admin')}`).send(body);
+      const admin = await ctx
+        .http()
+        .post('/v1/slots')
+        .set('Authorization', `Bearer ${await userToken(ctx, f, 'admin')}`)
+        .send(body);
       expect(admin.status).toBe(201);
       expect(admin.body.slots[0]).toMatchObject({ provider_id: f.provider2Id, status: 'open' });
     });
@@ -87,15 +116,19 @@ describe('dashboard auth and scheduling API', () => {
         .send({
           slots: [
             { provider_id: f.provider2Id, start: later(2, 5).toISOString(), end: later(2, 6).toISOString() },
-            { provider_id: f.provider2Id, start: new Date(later(2, 5).getTime() + 1800_000).toISOString(), end: later(2, 7).toISOString() },
+            {
+              provider_id: f.provider2Id,
+              start: new Date(later(2, 5).getTime() + 1800_000).toISOString(),
+              end: later(2, 7).toISOString(),
+            },
           ],
         });
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('CONFLICT');
-      const { rows } = await ctx.owner.query('SELECT count(*)::int AS n FROM slots WHERE provider_id = $1 AND starts_at = $2', [
-        f.provider2Id,
-        later(2, 5),
-      ]);
+      const { rows } = await ctx.owner.query(
+        'SELECT count(*)::int AS n FROM slots WHERE provider_id = $1 AND starts_at = $2',
+        [f.provider2Id, later(2, 5)],
+      );
       expect(rows[0].n).toBe(0);
     });
 
@@ -104,22 +137,36 @@ describe('dashboard auth and scheduling API', () => {
         .http()
         .post('/v1/slots')
         .set('Authorization', `Bearer ${await userToken(ctx, f, 'owner')}`)
-        .send({ slots: [{ provider_id: other.providerId, start: later(3, 5).toISOString(), end: later(3, 6).toISOString() }] });
+        .send({
+          slots: [{ provider_id: other.providerId, start: later(3, 5).toISOString(), end: later(3, 6).toISOString() }],
+        });
       expect(res.status).toBe(400);
     });
 
     it('blocks and reopens slots, but never a booked one', async () => {
       const token = await userToken(ctx, f, 'admin');
-      const blocked = await ctx.http().patch(`/v1/slots/${f.slotIds[0]}`).set('Authorization', `Bearer ${token}`).send({ status: 'blocked' });
+      const blocked = await ctx
+        .http()
+        .patch(`/v1/slots/${f.slotIds[0]}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: 'blocked' });
       expect(blocked.body.status).toBe('blocked');
-      await ctx.http().patch(`/v1/slots/${f.slotIds[0]}`).set('Authorization', `Bearer ${token}`).send({ status: 'open' });
+      await ctx
+        .http()
+        .patch(`/v1/slots/${f.slotIds[0]}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: 'open' });
 
       await ctx
         .http()
         .post('/v1/appointments')
         .set('Authorization', `Bearer ${token}`)
         .send({ slot_id: f.slotIds[1], contact: { phone: '+919700000001', name: 'Walk-in' } });
-      const res = await ctx.http().patch(`/v1/slots/${f.slotIds[1]}`).set('Authorization', `Bearer ${token}`).send({ status: 'blocked' });
+      const res = await ctx
+        .http()
+        .patch(`/v1/slots/${f.slotIds[1]}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: 'blocked' });
       expect(res.status).toBe(409);
     });
   });
@@ -134,9 +181,10 @@ describe('dashboard auth and scheduling API', () => {
         .send({ slot_id: f.slotIds[2], contact: { phone: '+919700000002' } });
       expect(res.status).toBe(201);
       expect(res.body.source).toBe('dashboard');
-      const { rows } = await ctx.owner.query(`SELECT envelope FROM outbox WHERE envelope->'payload'->>'appointment_id' = $1`, [
-        res.body.appointment_id,
-      ]);
+      const { rows } = await ctx.owner.query(
+        `SELECT envelope FROM outbox WHERE envelope->'payload'->>'appointment_id' = $1`,
+        [res.body.appointment_id],
+      );
       expect(rows[0].envelope).toMatchObject({ call_id: null, payload: { source: 'dashboard' } });
 
       const list = await ctx
@@ -145,7 +193,9 @@ describe('dashboard auth and scheduling API', () => {
         .query({ from: new Date().toISOString(), to: new Date(Date.now() + 30 * 86_400_000).toISOString() })
         .set('Authorization', `Bearer ${token}`);
       expect(list.status).toBe(200);
-      expect(list.body.appointments.map((a: { appointment_id: string }) => a.appointment_id)).toContain(res.body.appointment_id);
+      expect(list.body.appointments.map((a: { appointment_id: string }) => a.appointment_id)).toContain(
+        res.body.appointment_id,
+      );
     });
 
     it("hides other tenants' appointments as NOT_FOUND (no TENANT_MISMATCH oracle for users)", async () => {
@@ -164,7 +214,10 @@ describe('dashboard auth and scheduling API', () => {
     });
 
     it('requires authentication', async () => {
-      const res = await ctx.http().get('/v1/appointments').query({ from: new Date().toISOString(), to: new Date().toISOString() });
+      const res = await ctx
+        .http()
+        .get('/v1/appointments')
+        .query({ from: new Date().toISOString(), to: new Date().toISOString() });
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('UNAUTHORIZED');
       expect(randomUUID()).toBeDefined();

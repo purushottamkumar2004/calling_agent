@@ -1,0 +1,6 @@
+dist
+node_modules
+coverage
+src/contracts/generated
+migrations
+pnpm-lock.yaml

@@ -8,7 +8,12 @@ type Day = (typeof DAYS)[number];
 
 /** Location opening hours, wall-clock in the location timezone. Missing day = closed. */
 export const openingHoursSchema = z
-  .object(Object.fromEntries(DAYS.map((d) => [d, z.array(interval).optional()])) as Record<Day, z.ZodOptional<z.ZodArray<typeof interval>>>)
+  .object(
+    Object.fromEntries(DAYS.map((d) => [d, z.array(interval).optional()])) as Record<
+      Day,
+      z.ZodOptional<z.ZodArray<typeof interval>>
+    >,
+  )
   .strict();
 export type OpeningHours = z.infer<typeof openingHoursSchema>;
 

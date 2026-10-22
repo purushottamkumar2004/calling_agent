@@ -92,16 +92,33 @@ export function nextMondayIst(hour = 10, minute = 0, weeksAhead = 1): Date {
   const now = new Date();
   const istNow = new Date(now.getTime() + 5.5 * 3600_000);
   const daysToMonday = ((8 - istNow.getUTCDay()) % 7 || 7) + 7 * (weeksAhead - 1);
-  const d = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate() + daysToMonday, hour, minute));
+  const d = new Date(
+    Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate() + daysToMonday, hour, minute),
+  );
   return new Date(d.getTime() - 5.5 * 3600_000);
 }
 
 export const OPEN_HOURS = {
-  mon: [['09:00', '13:00'], ['16:00', '20:00']],
-  tue: [['09:00', '13:00'], ['16:00', '20:00']],
-  wed: [['09:00', '13:00'], ['16:00', '20:00']],
-  thu: [['09:00', '13:00'], ['16:00', '20:00']],
-  fri: [['09:00', '13:00'], ['16:00', '20:00']],
+  mon: [
+    ['09:00', '13:00'],
+    ['16:00', '20:00'],
+  ],
+  tue: [
+    ['09:00', '13:00'],
+    ['16:00', '20:00'],
+  ],
+  wed: [
+    ['09:00', '13:00'],
+    ['16:00', '20:00'],
+  ],
+  thu: [
+    ['09:00', '13:00'],
+    ['16:00', '20:00'],
+  ],
+  fri: [
+    ['09:00', '13:00'],
+    ['16:00', '20:00'],
+  ],
   sat: [['09:00', '13:00']],
 };
 
@@ -160,7 +177,11 @@ export async function seedTenant(
   return { tenantId, locationId, providerId, provider2Id, callId: call[0]!.id, slotIds, slotStarts, users };
 }
 
-export async function serviceHeaders(ctx: TestContext, f: { tenantId: string; callId: string }, service = 'voice-worker') {
+export async function serviceHeaders(
+  ctx: TestContext,
+  f: { tenantId: string; callId: string },
+  service = 'voice-worker',
+) {
   return {
     Authorization: `Bearer ${await ctx.jwt.signServiceToken(service)}`,
     'X-Tenant-Id': f.tenantId,
@@ -180,7 +201,10 @@ const contractsDir = resolve(__dirname, '../../../docs/contracts');
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
 ajv.addSchema(parseYaml(readFileSync(resolve(contractsDir, 'internal-api.openapi.yaml'), 'utf8')), 'openapi');
-ajv.addSchema(JSON.parse(readFileSync(resolve(contractsDir, 'agent-config.v1.schema.json'), 'utf8')), './agent-config.v1.schema.json');
+ajv.addSchema(
+  JSON.parse(readFileSync(resolve(contractsDir, 'agent-config.v1.schema.json'), 'utf8')),
+  './agent-config.v1.schema.json',
+);
 const envelope = ajv.compile(JSON.parse(readFileSync(resolve(contractsDir, 'events/envelope.schema.json'), 'utf8')));
 const booked = ajv.compile(
   JSON.parse(readFileSync(resolve(contractsDir, 'events/appointment.booked.v1.schema.json'), 'utf8')),
@@ -193,13 +217,19 @@ function pointer(path: string, method: string, status: string): string {
 
 /** Asserts a response body matches the frozen OpenAPI schema for that operation. */
 export function expectContract(body: unknown, path: string, method: string, status: number): void {
-  const validate = ajv.getSchema(pointer(path, method, String(status))) ?? ajv.compile({ $ref: pointer(path, method, String(status)) });
+  const validate =
+    ajv.getSchema(pointer(path, method, String(status))) ??
+    ajv.compile({ $ref: pointer(path, method, String(status)) });
   const ok = validate(body);
-  if (!ok) throw new Error(`Contract violation for ${method.toUpperCase()} ${path} ${status}: ${ajv.errorsText(validate.errors)}`);
+  if (!ok)
+    throw new Error(
+      `Contract violation for ${method.toUpperCase()} ${path} ${status}: ${ajv.errorsText(validate.errors)}`,
+    );
 }
 
 export function expectErrorContract(body: unknown): void {
-  const validate = ajv.getSchema('openapi#/components/schemas/Error') ?? ajv.compile({ $ref: 'openapi#/components/schemas/Error' });
+  const validate =
+    ajv.getSchema('openapi#/components/schemas/Error') ?? ajv.compile({ $ref: 'openapi#/components/schemas/Error' });
   if (!validate(body)) throw new Error(`Error contract violation: ${ajv.errorsText(validate.errors)}`);
 }
 

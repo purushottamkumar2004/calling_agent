@@ -45,9 +45,12 @@ export function loggerParams(config: AppConfig, stream?: DestinationStream): Par
       req: (req: { method: string; url: string }) => ({ method: req.method, url: req.url }),
       res: (res: { statusCode: number }) => ({ status_code: res.statusCode }),
     },
-    customLogLevel: (_req, res, err) => (err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info'),
+    customLogLevel: (_req, res, err) =>
+      err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
     transport:
-      config.NODE_ENV === 'development' && !stream ? { target: 'pino-pretty', options: { singleLine: true } } : undefined,
+      config.NODE_ENV === 'development' && !stream
+        ? { target: 'pino-pretty', options: { singleLine: true } }
+        : undefined,
   } satisfies NonNullable<Params['pinoHttp']>;
   return { pinoHttp: stream ? [options, stream] : options };
 }

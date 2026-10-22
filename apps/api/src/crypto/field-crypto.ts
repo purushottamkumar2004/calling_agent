@@ -17,7 +17,9 @@ export class FieldCrypto {
   private readonly key: Buffer;
   private readonly hashKey: Buffer;
 
-  constructor(@Inject(APP_CONFIG) config: Pick<AppConfig, 'FIELD_ENCRYPTION_KEY_ID' | 'FIELD_ENCRYPTION_KEY' | 'PHONE_HASH_KEY'>) {
+  constructor(
+    @Inject(APP_CONFIG) config: Pick<AppConfig, 'FIELD_ENCRYPTION_KEY_ID' | 'FIELD_ENCRYPTION_KEY' | 'PHONE_HASH_KEY'>,
+  ) {
     this.keyId = config.FIELD_ENCRYPTION_KEY_ID;
     this.key = Buffer.from(config.FIELD_ENCRYPTION_KEY, 'base64');
     this.hashKey = Buffer.from(config.PHONE_HASH_KEY, 'base64');

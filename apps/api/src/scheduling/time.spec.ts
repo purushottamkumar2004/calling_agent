@@ -1,7 +1,13 @@
 import { overlapsOpeningHours, speakable, isValidTimezone } from './time';
 
 const IST = 'Asia/Kolkata';
-const hours = { mon: [['09:00', '13:00'], ['16:00', '20:00']], sat: [['10:00', '14:00']] } as const;
+const hours = {
+  mon: [
+    ['09:00', '13:00'],
+    ['16:00', '20:00'],
+  ],
+  sat: [['10:00', '14:00']],
+} as const;
 const h = hours as unknown as Parameters<typeof overlapsOpeningHours>[3];
 
 describe('speakable', () => {

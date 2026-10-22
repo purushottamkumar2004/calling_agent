@@ -7,7 +7,11 @@ import { requireTenantContext } from '../common/request-context';
 import { DbService } from '../db/db.service';
 import { respond } from '../common/http';
 import { AppointmentsService } from '../scheduling/appointments.service';
-import { SchedulingRepository, toContractAppointment, type ContractAppointment } from '../scheduling/scheduling.repository';
+import {
+  SchedulingRepository,
+  toContractAppointment,
+  type ContractAppointment,
+} from '../scheduling/scheduling.repository';
 import { type DashboardSlot, SlotsAdminService } from '../scheduling/slots-admin.service';
 
 /*
@@ -73,7 +77,9 @@ export class DashboardSlotsController {
   @Get()
   async list(@Query() query: unknown): Promise<{ slots: DashboardSlot[] }> {
     const q = parse(listSlotsQuery, query);
-    return { slots: await this.slots.list({ from: q.from, to: q.to, providerId: q.provider_id, status: q.status }, q.limit) };
+    return {
+      slots: await this.slots.list({ from: q.from, to: q.to, providerId: q.provider_id, status: q.status }, q.limit),
+    };
   }
 
   @Patch(':slot_id')
@@ -96,7 +102,9 @@ export class DashboardAppointmentsController {
   async list(@Query() query: unknown): Promise<{ appointments: ContractAppointment[] }> {
     const q = parse(listAppointmentsQuery, query);
     const { tenantId } = requireTenantContext();
-    const rows = await this.db.tenantTx(tenantId, (tx) => this.repo.listAppointmentsInWindow(tx, q.from, q.to, q.limit));
+    const rows = await this.db.tenantTx(tenantId, (tx) =>
+      this.repo.listAppointmentsInWindow(tx, q.from, q.to, q.limit),
+    );
     return { appointments: rows.map(toContractAppointment) };
   }
 
@@ -122,7 +130,10 @@ export class DashboardAppointmentsController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<ContractAppointment> {
     const b = parse(z.object({ new_slot_id: zUuid }), body);
-    return respond(res, await this.appointments.reschedule(parse(zUuid, id), b.new_slot_id, parse(idempotencyKey, key)));
+    return respond(
+      res,
+      await this.appointments.reschedule(parse(zUuid, id), b.new_slot_id, parse(idempotencyKey, key)),
+    );
   }
 
   @Post(':appointment_id/cancel')

@@ -12,9 +12,7 @@ const secret = (name: string) =>
     .min(1, `${name} is required`)
     .refine((v) => Buffer.from(v, 'base64').length >= 32, `${name} must be at least 32 bytes, base64-encoded`);
 
-const bool = z
-  .enum(['true', 'false', '1', '0'])
-  .transform((v) => v === 'true' || v === '1');
+const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1');
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -35,10 +33,18 @@ export const envSchema = z.object({
   SERVICE_JWT_ALLOWED_ISSUERS: z
     .string()
     .default('voice-gateway,voice-worker,scheduler,postcall-worker')
-    .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
+    .transform((v) =>
+      v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
   SERVICE_JWT_MAX_TTL_SEC: z.coerce.number().int().min(30).max(3600).default(300),
 
-  FIELD_ENCRYPTION_KEY_ID: z.string().regex(/^[a-z0-9]{1,16}$/).default('k1'),
+  FIELD_ENCRYPTION_KEY_ID: z
+    .string()
+    .regex(/^[a-z0-9]{1,16}$/)
+    .default('k1'),
   FIELD_ENCRYPTION_KEY: base64Key('FIELD_ENCRYPTION_KEY'),
   PHONE_HASH_KEY: base64Key('PHONE_HASH_KEY'),
 

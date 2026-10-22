@@ -40,6 +40,7 @@ export class ErrorFilter implements ExceptionFilter {
 
 function isClientError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
-  const status = (err as { status?: unknown; statusCode?: unknown }).status ?? (err as { statusCode?: unknown }).statusCode;
+  const status =
+    (err as { status?: unknown; statusCode?: unknown }).status ?? (err as { statusCode?: unknown }).statusCode;
   return typeof status === 'number' && status >= 400 && status < 500 && 'type' in err;
 }

@@ -32,7 +32,11 @@ describe('GET /internal/v1/availability (checkAvailability)', () => {
   const week = () => ({ from: new Date().toISOString(), to: new Date(Date.now() + 15 * 86_400_000).toISOString() });
 
   it('returns open future slots soonest first, contract-shaped, with speakable text', async () => {
-    const res = await ctx.http().get(path).query({ ...week(), limit: 20 }).set(await serviceHeaders(ctx, f));
+    const res = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), limit: 20 })
+      .set(await serviceHeaders(ctx, f));
     expect(res.status).toBe(200);
     expectContract(res.body, '/availability', 'get', 200);
     const slots = res.body.slots as Array<{ slot_id: string; start: string; speakable: string; provider_name: string }>;
@@ -44,33 +48,69 @@ describe('GET /internal/v1/availability (checkAvailability)', () => {
   });
 
   it('defaults limit to 5 and caps at 20', async () => {
-    const res = await ctx.http().get(path).query(week()).set(await serviceHeaders(ctx, f));
+    const res = await ctx
+      .http()
+      .get(path)
+      .query(week())
+      .set(await serviceHeaders(ctx, f));
     expect(res.body.slots).toHaveLength(5);
-    const over = await ctx.http().get(path).query({ ...week(), limit: 21 }).set(await serviceHeaders(ctx, f));
+    const over = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), limit: 21 })
+      .set(await serviceHeaders(ctx, f));
     expect(over.status).toBe(400);
     expect(over.body.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('filters by provider, specialty and location', async () => {
-    const byProvider = await ctx.http().get(path).query({ ...week(), provider_id: f.provider2Id }).set(await serviceHeaders(ctx, f));
+    const byProvider = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), provider_id: f.provider2Id })
+      .set(await serviceHeaders(ctx, f));
     expect(byProvider.body.slots).toEqual([]);
-    const bySpecialty = await ctx.http().get(path).query({ ...week(), specialty: 'GENERAL' }).set(await serviceHeaders(ctx, f));
+    const bySpecialty = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), specialty: 'GENERAL' })
+      .set(await serviceHeaders(ctx, f));
     expect(bySpecialty.body.slots.length).toBe(5);
-    const none = await ctx.http().get(path).query({ ...week(), specialty: 'dermatology' }).set(await serviceHeaders(ctx, f));
+    const none = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), specialty: 'dermatology' })
+      .set(await serviceHeaders(ctx, f));
     expect(none.body.slots).toEqual([]);
-    const byLocation = await ctx.http().get(path).query({ ...week(), location_id: f.locationId }).set(await serviceHeaders(ctx, f));
+    const byLocation = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), location_id: f.locationId })
+      .set(await serviceHeaders(ctx, f));
     expect(byLocation.body.slots.length).toBe(5);
   });
 
   it("never returns another tenant's slots and flags their provider as TENANT_MISMATCH", async () => {
-    const res = await ctx.http().get(path).query({ ...week(), limit: 20 }).set(await serviceHeaders(ctx, f));
+    const res = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), limit: 20 })
+      .set(await serviceHeaders(ctx, f));
     const ids = (res.body.slots as Array<{ slot_id: string }>).map((s) => s.slot_id);
     for (const id of other.slotIds) expect(ids).not.toContain(id);
 
-    const cross = await ctx.http().get(path).query({ ...week(), provider_id: other.providerId }).set(await serviceHeaders(ctx, f));
+    const cross = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), provider_id: other.providerId })
+      .set(await serviceHeaders(ctx, f));
     expect(cross.status).toBe(403);
     expect(cross.body.error.code).toBe('TENANT_MISMATCH');
-    const missing = await ctx.http().get(path).query({ ...week(), provider_id: randomUUID() }).set(await serviceHeaders(ctx, f));
+    const missing = await ctx
+      .http()
+      .get(path)
+      .query({ ...week(), provider_id: randomUUID() })
+      .set(await serviceHeaders(ctx, f));
     expect(missing.status).toBe(404);
     expect(missing.body.error.code).toBe('NOT_FOUND');
   });
@@ -106,9 +146,18 @@ describe('GET /internal/v1/availability (checkAvailability)', () => {
     [{ to: new Date().toISOString() }],
     [{ from: new Date(Date.now() + 3600_000).toISOString(), to: new Date().toISOString() }],
     [{ from: new Date().toISOString(), to: new Date(Date.now() + 40 * 86_400_000).toISOString() }],
-    [{ ...{ from: new Date().toISOString(), to: new Date(Date.now() + 3600_000).toISOString() }, provider_id: 'not-a-uuid' }],
+    [
+      {
+        ...{ from: new Date().toISOString(), to: new Date(Date.now() + 3600_000).toISOString() },
+        provider_id: 'not-a-uuid',
+      },
+    ],
   ])('rejects bad query %j with VALIDATION_ERROR', async (q) => {
-    const res = await ctx.http().get(path).query(q).set(await serviceHeaders(ctx, f));
+    const res = await ctx
+      .http()
+      .get(path)
+      .query(q)
+      .set(await serviceHeaders(ctx, f));
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
     expectErrorContract(res.body);
