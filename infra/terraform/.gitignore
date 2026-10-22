@@ -1,0 +1,9 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+# Account-specific / local-only inputs (examples are committed)
+terraform.tfvars
+backend.hcl
+# Keep provider lock files: .terraform.lock.hcl is committed
