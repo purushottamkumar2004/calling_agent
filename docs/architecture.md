@@ -121,8 +121,8 @@ Verify legal requirements with a lawyer before launch; these are the engineering
 | Stage | Setup | When |
 | --- | --- | --- |
 | Local | docker-compose: Postgres, Redis, MinIO; ngrok for webhooks | Day one |
-| Pilot | AWS ECS in ap-south-1; RDS Postgres, ElastiCache Redis | First 5-10 clinics |
-| Production | EKS in ap-south-1; autoscaled Voice Workers; staging environment | When calls outgrow one host |
+| Pilot | AWS ECS in ap-south-1; RDS Postgres, ElastiCache Redis; staging environment live before first clinic | First 5-10 clinics |
+| Production | EKS in ap-south-1; autoscaled Voice Workers | When calls outgrow one host |
 
 - Scale Voice Workers on active-call count; workers report capacity to Redis; Gateway routes to least-loaded.
 - Workers drain gracefully on deploy.
@@ -149,7 +149,9 @@ Verify legal requirements with a lawyer before launch; these are the engineering
 
 ## Conventions
 
-- TypeScript strict; Python with type hints, ruff, mypy.
+- TypeScript strict on Node 24 LTS with pnpm; Python 3.12 with uv, type hints, ruff, mypy.
+- Every app exposes the same tasks: `dev`, `build`, `test`, `lint`, `typecheck`, `format` (ADR 0010).
+- Logs, metrics and traces stay in ap-south-1; hosted error tracking only with PII scrubbing (ADR 0009).
 - REST with OpenAPI generated from the Core API; shared types generated from it.
 - Events named `domain.action` with versioned JSON schemas.
 - Times stored in UTC, displayed in the location's timezone.

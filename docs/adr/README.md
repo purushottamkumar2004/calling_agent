@@ -12,6 +12,8 @@ One file per decision, numbered in order. Decided in the Master chat, then recor
 | [0006](0006-telephony-exotel.md) | Telephony: Exotel, Plivo fallback | Accepted |
 | [0007](0007-cloud-aws-mumbai.md) | Cloud: AWS ap-south-1 | Accepted |
 | [0008](0008-service-contracts-v1.md) | Service contracts v1 | Accepted |
+| [0009](0009-telemetry-data-residency.md) | Telemetry and error tracking under India-only hosting | Accepted |
+| [0010](0010-staging-and-toolchain-conventions.md) | Staging timing and toolchain conventions | Accepted |
 
 ## Template
 
