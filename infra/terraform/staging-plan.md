@@ -23,12 +23,13 @@ infra/terraform/
   modules/
     network/        # VPC, subnets, NAT, endpoints      (written)
     data/           # RDS, ElastiCache, S3 recordings bucket, KMS   (written)
-    ecs-cluster/    # cluster, Cloud Map namespace, log groups
-    ecs-service/    # one module, used for each app
-    edge/           # ALBs, ACM, Route 53
+    ecs-cluster/    # cluster, Cloud Map namespace      (written)
+    ecs-service/    # one module, used for each app     (written)
+    edge/           # ALB, ACM, Route 53                (written)
+    ecr/            # one repository per app            (written)
     github-oidc/    # GitHub OIDC provider + deploy role   (written)
   envs/
-    staging/        # composes modules; staging sizes  (network, data, OIDC written)
+    staging/        # composes modules; staging sizes  (all layers written, plan only)
     prod/           # later
 ```
 
@@ -87,7 +88,8 @@ Production (by tag, evaluation suite as a gate) reuses the same pipeline against
 - Logs, metrics and traces stay in ap-south-1. Services emit OpenTelemetry (OTLP) to an ADOT/OTel collector sidecar per task.
 - Backend in Mumbai. Recommended for staging: CloudWatch Logs (JSON, 14-day retention, every line with `tenant_id` and `call_id`) plus X-Ray traces and CloudWatch metrics through the collector, with Grafana on top for dashboards. A self-hosted Grafana/Loki/Tempo stack stays an option if CloudWatch costs or query limits bite; switching is a collector config change.
 - Error tracking: hosted Sentry for stack traces only, with mandatory scrubbing (`send_default_pii=false`; no bodies, transcripts, phones or recording keys; only `tenant_id`, `call_id`, `agent_version`). DSN in Secrets Manager. Moving to self-hosted Sentry in ap-south-1 is a DSN change.
-- Infra alarms (CloudWatch -> SNS -> email/Slack): ALB 5xx, unhealthy targets, ECS running task count, RDS CPU/storage/connections, Redis memory and connections, NAT errors.
+- One shared ADOT collector service (`otel.internal`, pinned image) instead of a sidecar per task: traces to X-Ray, metrics to CloudWatch via EMF (`CallingAgent/staging`).
+- Infra alarms written (CloudWatch -> SNS, optional email): ALB 5xx, per-service target 5xx and unhealthy targets, Postgres CPU/storage/memory, Redis memory (critical with `noeviction`). Missing data is not an alarm for services (they scale to zero at night) but is for Postgres and Redis.
 - App alerts from the architecture: p95 turn latency over target, call failure rate, provider errors, worker capacity.
 - Before the pilot: legal confirmation that scrubbed, ID-only error events abroad are acceptable under DPDP (ADR 0009 consequence).
 
@@ -111,7 +113,7 @@ Scaling ECS services to zero outside working hours cuts the Fargate line by roug
 
 | From | What |
 | --- | --- |
-| 01 Core API | `node dist/scripts/migrate.js` reading `MIGRATION_DATABASE_URL` from env (routed by Master). Note: the RDS-managed owner secret is JSON (`username`, `password`), not a URL, and rotates; ECS injects JSON keys as separate env vars. So migrate.js should also accept standard `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` (+ `PGSSLMODE=require`) when `MIGRATION_DATABASE_URL` is unset. Also a production-safe version of `db:setup-local-role` for the one-off role task |
-| 02 Voice Gateway | `/health`; reads worker capacity from Redis by private IP |
-| 03 Voice Worker | Toggle ECS task scale-in protection around active calls; `SIGTERM` = stop taking new calls |
+| 01 Core API | Done: `node dist/scripts/migrate.js` (infra provides `MIGRATION_DATABASE_URL` from the owner secret's `url` key). Still needed: ES256 verification reading `SERVICE_JWT_PUBLIC_KEYS` (provisional name); a production-safe version of `db:setup-local-role` for the one-off app-login role task; `S3_BUCKET` for signed recording URLs |
+| 02 Voice Gateway | `/health` on port 8000; reads worker capacity from Redis by private IP; signs service JWTs with `SERVICE_JWT_PRIVATE_KEY` (ES256) |
+| 03 Voice Worker | Listen on 8080 for the gateway (ASSUMED); toggle ECS task scale-in protection around active calls; `SIGTERM` = stop taking new calls; confirm provider key names (`SARVAM_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `LLM_API_KEY`) |
 | All apps | Follow the CI contract in `infra/README.md`; Dockerfile-ready start command; config only via env vars. In AWS: Postgres needs `sslmode=require`, Redis URLs are `rediss://` (TLS + AUTH) |

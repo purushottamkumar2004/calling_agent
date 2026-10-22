@@ -11,8 +11,8 @@ output "postgres_port" {
 }
 
 output "postgres_owner_secret_arn" {
-  description = "RDS-managed secret for the schema owner (migrations only)."
-  value       = aws_db_instance.this.master_user_secret[0].secret_arn
+  description = "Schema owner secret (keys: url, username, password, ...). Migration task only."
+  value       = aws_secretsmanager_secret.db_owner.arn
 }
 
 output "postgres_app_secret_arn" {

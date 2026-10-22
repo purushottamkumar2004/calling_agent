@@ -32,4 +32,6 @@ CI discovers apps and calls only the standard task names, so adding an app never
 
 **Contracts**: every PR validates `docs/contracts` (schemas compile, OpenAPI 3.1 valid, examples match). Locally: `pnpm contracts:check`.
 
-**Branch protection**: require the single `CI OK` check on `main`.
+**Ignored source files**: CI fails if a `.gitignore` rule hides files under `infra/`, `apps/*/src/` or `packages/*/src/`. A clean CI checkout never contains files that were ignored locally, so run `pnpm check:ignored` before pushing; that is the check that would have caught the missing `modules/data/` (fix/ci-opentofu).
+
+**Branch protection**: require the single `CI OK` check on `main`, so a red PR cannot be merged.

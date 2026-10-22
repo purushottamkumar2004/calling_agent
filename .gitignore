@@ -8,7 +8,9 @@
 node_modules/
 dist/
 .next/
-out/
+# Root-anchored: generic names must not swallow source directories elsewhere.
+/out/
+apps/*/out/
 coverage/
 *.tsbuildinfo
 .turbo/
@@ -28,9 +30,7 @@ venv/
 # Recordings and local data
 *.wav
 *.mp3
-data/
-# ...but not source directories that happen to be named data
-!infra/terraform/modules/data/
+/data/
 
 # Infra
 .terraform/
