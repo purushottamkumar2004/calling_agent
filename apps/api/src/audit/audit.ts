@@ -16,6 +16,14 @@ export async function recordAudit(tx: Tx, entry: AuditEntry): Promise<void> {
   await tx.query(
     `INSERT INTO audit_log (tenant_id, actor_type, actor_id, action, target_type, target_id, call_id, metadata)
      VALUES (app_current_tenant(), $1, $2, $3, $4, $5, $6, $7)`,
-    [actor.type, actorId, entry.action, entry.targetType, entry.targetId ?? null, ctx?.callId ?? null, entry.metadata ?? {}],
+    [
+      actor.type,
+      actorId,
+      entry.action,
+      entry.targetType,
+      entry.targetId ?? null,
+      ctx?.callId ?? null,
+      entry.metadata ?? {},
+    ],
   );
 }

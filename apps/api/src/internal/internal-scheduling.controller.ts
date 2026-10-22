@@ -32,7 +32,10 @@ const availabilityQuery = z
     limit: z.coerce.number().int().min(1).max(20).default(5),
   })
   .refine((q) => q.to > q.from, { message: 'must be after from', path: ['to'] })
-  .refine((q) => q.to.getTime() - q.from.getTime() <= MAX_WINDOW_MS, { message: 'window must be 31 days or less', path: ['to'] });
+  .refine((q) => q.to.getTime() - q.from.getTime() <= MAX_WINDOW_MS, {
+    message: 'window must be 31 days or less',
+    path: ['to'],
+  });
 
 const listQuery = z.object({
   contact_id: zUuid,

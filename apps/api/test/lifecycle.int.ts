@@ -22,7 +22,12 @@ describe('reschedule, cancel and list', () => {
   afterAll(() => ctx.close());
 
   const post = async (path: string, body: unknown, key: string = randomUUID(), fx: Fixture = f) =>
-    ctx.http().post(`/internal/v1${path}`).set(await serviceHeaders(ctx, fx)).set('Idempotency-Key', key).send(body as object);
+    ctx
+      .http()
+      .post(`/internal/v1${path}`)
+      .set(await serviceHeaders(ctx, fx))
+      .set('Idempotency-Key', key)
+      .send(body as object);
   const book = (slotIndex: number, phone = '+919876500000') =>
     post('/appointments', { slot_id: f.slotIds[slotIndex], contact: { phone } });
   const slotStatus = async (id: string) =>
@@ -34,7 +39,11 @@ describe('reschedule, cancel and list', () => {
       const res = await post(`/appointments/${booked.body.appointment_id}/reschedule`, { new_slot_id: f.slotIds[1] });
       expect(res.status).toBe(200);
       expectContract(res.body, '/appointments/{appointment_id}/reschedule', 'post', 200);
-      expect(res.body).toMatchObject({ appointment_id: booked.body.appointment_id, status: 'rescheduled', slot: { slot_id: f.slotIds[1] } });
+      expect(res.body).toMatchObject({
+        appointment_id: booked.body.appointment_id,
+        status: 'rescheduled',
+        slot: { slot_id: f.slotIds[1] },
+      });
       expect(await slotStatus(f.slotIds[0]!)).toBe('open');
       expect(await slotStatus(f.slotIds[1]!)).toBe('booked');
       // The freed slot is bookable again.
@@ -60,7 +69,12 @@ describe('reschedule, cancel and list', () => {
     });
 
     it("rejects another tenant's appointment with TENANT_MISMATCH", async () => {
-      const theirs = await post('/appointments', { slot_id: other.slotIds[0], contact: { phone: '+919876500005' } }, randomUUID(), other);
+      const theirs = await post(
+        '/appointments',
+        { slot_id: other.slotIds[0], contact: { phone: '+919876500005' } },
+        randomUUID(),
+        other,
+      );
       const res = await post(`/appointments/${theirs.body.appointment_id}/reschedule`, { new_slot_id: f.slotIds[5] });
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe('TENANT_MISMATCH');
@@ -114,7 +128,12 @@ describe('reschedule, cancel and list', () => {
 
     it('enforces the tenant cancel window with 422 POLICY_BLOCKED', async () => {
       const strict = await seedTenant(ctx, { settings: { cancel_cutoff_minutes: 60 * 24 * 30 } });
-      const a = await post('/appointments', { slot_id: strict.slotIds[0], contact: { phone: '+919876500011' } }, randomUUID(), strict);
+      const a = await post(
+        '/appointments',
+        { slot_id: strict.slotIds[0], contact: { phone: '+919876500011' } },
+        randomUUID(),
+        strict,
+      );
       const res = await post(`/appointments/${a.body.appointment_id}/cancel`, {}, randomUUID(), strict);
       expect(res.status).toBe(422);
       expect(res.body.error.code).toBe('POLICY_BLOCKED');
@@ -143,7 +162,9 @@ describe('reschedule, cancel and list', () => {
         .set(await serviceHeaders(ctx, f));
       expect(res.status).toBe(200);
       expectContract(res.body, '/appointments', 'get', 200);
-      expect(res.body.appointments.map((x: { appointment_id: string }) => x.appointment_id)).toEqual([a.body.appointment_id]);
+      expect(res.body.appointments.map((x: { appointment_id: string }) => x.appointment_id)).toEqual([
+        a.body.appointment_id,
+      ]);
 
       const all = await ctx
         .http()
@@ -154,7 +175,10 @@ describe('reschedule, cancel and list', () => {
     });
 
     it('requires contact_id', async () => {
-      const res = await ctx.http().get('/internal/v1/appointments').set(await serviceHeaders(ctx, f));
+      const res = await ctx
+        .http()
+        .get('/internal/v1/appointments')
+        .set(await serviceHeaders(ctx, f));
       expect(res.status).toBe(400);
     });
   });

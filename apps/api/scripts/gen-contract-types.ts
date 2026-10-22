@@ -10,7 +10,8 @@ import { compile } from 'json-schema-to-typescript';
 
 const contractsDir = resolve(__dirname, '../../../docs/contracts');
 const outDir = resolve(__dirname, '../src/contracts/generated');
-const banner = '/* eslint-disable */\n// GENERATED from docs/contracts by scripts/gen-contract-types.ts. Do not edit.\n\n';
+const banner =
+  '/* eslint-disable */\n// GENERATED from docs/contracts by scripts/gen-contract-types.ts. Do not edit.\n\n';
 
 async function main(): Promise<void> {
   const ast = await openapiTS(new URL(`file://${contractsDir}/internal-api.openapi.yaml`));

@@ -32,10 +32,10 @@ describe('row-level security (service role)', () => {
   it("cannot write rows into another tenant's scope", async () => {
     await expect(
       db.tenantTx(a.tenantId, (tx) =>
-        tx.query('INSERT INTO slots (tenant_id, provider_id, starts_at, ends_at) VALUES ($1, $2, now() + interval \'30 days\', now() + interval \'30 days 30 min\')', [
-          b.tenantId,
-          b.providerId,
-        ]),
+        tx.query(
+          "INSERT INTO slots (tenant_id, provider_id, starts_at, ends_at) VALUES ($1, $2, now() + interval '30 days', now() + interval '30 days 30 min')",
+          [b.tenantId, b.providerId],
+        ),
       ),
     ).rejects.toThrow(/row-level security/);
   });
@@ -55,18 +55,23 @@ describe('row-level security (service role)', () => {
   it('does not leak the tenant binding across pooled connections', async () => {
     await db.tenantTx(a.tenantId, (tx) => tx.query('SELECT 1'));
     const setting = await db.systemTx(
-      async (tx) => (await tx.query<{ t: string | null }>("SELECT current_setting('app.tenant_id', true) AS t")).rows[0]?.t,
+      async (tx) =>
+        (await tx.query<{ t: string | null }>("SELECT current_setting('app.tenant_id', true) AS t")).rows[0]?.t,
     );
     expect(setting ?? '').toBe('');
   });
 
   it('resource_tenant reports the owner without exposing data', async () => {
-    const owner = await db.tenantTx(a.tenantId, async (tx) =>
-      (await tx.query<{ o: string }>('SELECT resource_tenant($1, $2) AS o', ['slot', b.slotIds[0]])).rows[0]?.o,
+    const owner = await db.tenantTx(
+      a.tenantId,
+      async (tx) =>
+        (await tx.query<{ o: string }>('SELECT resource_tenant($1, $2) AS o', ['slot', b.slotIds[0]])).rows[0]?.o,
     );
     expect(owner).toBe(b.tenantId);
-    const none = await db.systemTx(async (tx) =>
-      (await tx.query<{ o: string | null }>('SELECT resource_tenant($1, $2) AS o', ['call', randomUUID()])).rows[0]?.o,
+    const none = await db.systemTx(
+      async (tx) =>
+        (await tx.query<{ o: string | null }>('SELECT resource_tenant($1, $2) AS o', ['call', randomUUID()])).rows[0]
+          ?.o,
     );
     expect(none).toBeNull();
   });

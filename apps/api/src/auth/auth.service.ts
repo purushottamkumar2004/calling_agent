@@ -71,31 +71,33 @@ export class AuthService {
     });
     if (!stored) throw errors.unauthorized('Invalid refresh token');
 
-    return this.db.tenantTx(stored.tenant_id, async (tx) => {
-      if (stored.revoked_at) {
-        await tx.query('UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [
-          stored.user_id,
-        ]);
-        this.logger.warn({ user_id: stored.user_id }, 'refresh token reuse detected; all sessions revoked');
-        return null;
-      }
-      if (stored.expires_at.getTime() <= Date.now()) return null;
+    return this.db
+      .tenantTx(stored.tenant_id, async (tx) => {
+        if (stored.revoked_at) {
+          await tx.query('UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [
+            stored.user_id,
+          ]);
+          this.logger.warn({ user_id: stored.user_id }, 'refresh token reuse detected; all sessions revoked');
+          return null;
+        }
+        if (stored.expires_at.getTime() <= Date.now()) return null;
 
-      const { rows } = await tx.query<{ role: UserRole; status: string; tenant_status: string }>(
-        `SELECT u.role, u.status, t.status AS tenant_status
+        const { rows } = await tx.query<{ role: UserRole; status: string; tenant_status: string }>(
+          `SELECT u.role, u.status, t.status AS tenant_status
            FROM users u JOIN tenants t ON t.id = u.tenant_id WHERE u.id = $1`,
-        [stored.user_id],
-      );
-      const user = rows[0];
-      if (!user || user.status !== 'active' || user.tenant_status !== 'active') return null;
+          [stored.user_id],
+        );
+        const user = rows[0];
+        if (!user || user.status !== 'active' || user.tenant_status !== 'active') return null;
 
-      this.bindContext(stored.tenant_id, stored.user_id, user.role);
-      return this.issue(tx, stored.tenant_id, stored.user_id, user.role, stored.id);
-    }).then((pair) => {
-      // Throw after commit so a reuse-triggered revocation is persisted.
-      if (!pair) throw errors.unauthorized('Invalid refresh token');
-      return pair;
-    });
+        this.bindContext(stored.tenant_id, stored.user_id, user.role);
+        return this.issue(tx, stored.tenant_id, stored.user_id, user.role, stored.id);
+      })
+      .then((pair) => {
+        // Throw after commit so a reuse-triggered revocation is persisted.
+        if (!pair) throw errors.unauthorized('Invalid refresh token');
+        return pair;
+      });
   }
 
   async logout(refreshToken: string): Promise<void> {

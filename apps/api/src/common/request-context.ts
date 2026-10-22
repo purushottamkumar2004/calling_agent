@@ -1,9 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 export type Actor =
-  | { type: 'user'; userId: string; role: UserRole }
-  | { type: 'service'; service: string }
-  | { type: 'system' };
+  { type: 'user'; userId: string; role: UserRole } | { type: 'service'; service: string } | { type: 'system' };
 
 export type UserRole = 'owner' | 'admin' | 'staff';
 

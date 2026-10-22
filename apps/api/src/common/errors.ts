@@ -52,8 +52,7 @@ export const errors = {
   tenantMismatch: (message = 'Resource is not owned by this tenant') => new ApiError('TENANT_MISMATCH', message),
   forbidden: (message = 'Not allowed for this role') => new ApiError('FORBIDDEN', message),
   notFound: (what: string) => new ApiError('NOT_FOUND', `${what} not found`),
-  slotTaken: (alternatives: Slot[]) =>
-    new ApiError('SLOT_TAKEN', 'That slot is no longer available', { alternatives }),
+  slotTaken: (alternatives: Slot[]) => new ApiError('SLOT_TAKEN', 'That slot is no longer available', { alternatives }),
   outsideHours: (alternatives: Slot[]) =>
     new ApiError('OUTSIDE_HOURS', 'Requested time is outside clinic hours', { alternatives }),
   policyBlocked: (message: string) => new ApiError('POLICY_BLOCKED', message),

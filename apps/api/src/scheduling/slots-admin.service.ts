@@ -43,7 +43,10 @@ export class SlotsAdminService {
            RETURNING id`,
           [slots.map((s) => s.provider_id), slots.map((s) => s.start), slots.map((s) => s.end)],
         );
-        const created = await this.repo.getSlots(tx, rows.map((r) => r.id));
+        const created = await this.repo.getSlots(
+          tx,
+          rows.map((r) => r.id),
+        );
         await recordAudit(tx, { action: 'slots.create', targetType: 'slot', metadata: { count: created.length } });
         this.logger.log({ count: created.length }, 'slots created');
         return created.map(toDashboardSlot);
@@ -67,7 +70,12 @@ export class SlotsAdminService {
           ORDER BY s.starts_at, s.id LIMIT $5`,
         [filters.from, filters.to, filters.providerId ?? null, filters.status ?? null, limit],
       );
-      return (await this.repo.getSlots(tx, rows.map((r) => r.id))).map(toDashboardSlot);
+      return (
+        await this.repo.getSlots(
+          tx,
+          rows.map((r) => r.id),
+        )
+      ).map(toDashboardSlot);
     });
   }
 
@@ -75,12 +83,18 @@ export class SlotsAdminService {
   async setStatus(slotId: string, status: 'open' | 'blocked'): Promise<DashboardSlot> {
     const { tenantId } = requireTenantContext();
     return this.db.tenantTx(tenantId, async (tx) => {
-      const { rows } = await tx.query<{ status: string }>('SELECT status FROM slots WHERE id = $1 FOR UPDATE', [slotId]);
+      const { rows } = await tx.query<{ status: string }>('SELECT status FROM slots WHERE id = $1 FOR UPDATE', [
+        slotId,
+      ]);
       const current = rows[0];
       if (!current) throw errors.notFound('Slot');
       if (current.status === 'booked') throw errors.conflict('Slot is booked; cancel or reschedule the appointment');
       await tx.query('UPDATE slots SET status = $2 WHERE id = $1', [slotId, status]);
-      await recordAudit(tx, { action: `slot.${status === 'open' ? 'open' : 'block'}`, targetType: 'slot', targetId: slotId });
+      await recordAudit(tx, {
+        action: `slot.${status === 'open' ? 'open' : 'block'}`,
+        targetType: 'slot',
+        targetId: slotId,
+      });
       const row = await this.repo.getSlot(tx, slotId);
       return toDashboardSlot(row as SlotRow);
     });

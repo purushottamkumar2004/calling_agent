@@ -134,7 +134,10 @@ export class AppointmentsService {
         targetId: appointmentId,
         metadata: { from_slot_id: current.slot_id, to_slot_id: newSlotId },
       });
-      this.logger.log({ appointment_id: appointmentId, from_slot_id: current.slot_id, to_slot_id: newSlotId }, 'appointment rescheduled');
+      this.logger.log(
+        { appointment_id: appointmentId, from_slot_id: current.slot_id, to_slot_id: newSlotId },
+        'appointment rescheduled',
+      );
       return toContractAppointment(updated);
     });
   }
@@ -197,7 +200,10 @@ export class AppointmentsService {
         (pgErrorCode(err) === PG_UNIQUE_VIOLATION && pgConstraint(err) === 'appointments_one_active_per_slot') ||
         pgErrorCode(err) === PG_EXCLUSION_VIOLATION;
       if (isGuard && contestedSlotId) {
-        this.logger.warn({ slot_id: contestedSlotId, constraint: pgConstraint(err) }, 'database double-booking guard fired');
+        this.logger.warn(
+          { slot_id: contestedSlotId, constraint: pgConstraint(err) },
+          'database double-booking guard fired',
+        );
         const alternatives = await this.db.tenantTx(tenantId, async (tx) => {
           const slot = await this.repo.getSlot(tx, contestedSlotId);
           return slot ? (await this.repo.alternativesNear(tx, slot)).map(toContractSlot) : [];
@@ -218,7 +224,10 @@ export class AppointmentsService {
       throw errors.policyBlocked('That slot is in the past');
     }
     const alternatives = await this.repo.alternativesNear(tx, slot);
-    this.logger.log({ slot_id: slotId, slot_status: slot.status, alternatives: alternatives.length }, 'slot unavailable');
+    this.logger.log(
+      { slot_id: slotId, slot_status: slot.status, alternatives: alternatives.length },
+      'slot unavailable',
+    );
     throw errors.slotTaken(alternatives.map(toContractSlot));
   }
 
@@ -238,7 +247,8 @@ export class AppointmentsService {
     if (startsIn <= 0) throw errors.policyBlocked(`A past appointment cannot be ${verb}`);
     const parsed = policySchema.safeParse(await this.repo.tenantSettings(tx));
     const cutoff = parsed.success ? parsed.data[setting] : 0;
-    if (!parsed.success) this.logger.error({ issues: parsed.error.issues }, 'invalid tenant scheduling settings; using defaults');
+    if (!parsed.success)
+      this.logger.error({ issues: parsed.error.issues }, 'invalid tenant scheduling settings; using defaults');
     if (startsIn < cutoff * 60_000) {
       throw errors.policyBlocked(`Appointments can only be ${verb} at least ${cutoff} minutes in advance`);
     }

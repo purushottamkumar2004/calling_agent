@@ -8,16 +8,16 @@ and the frozen contracts in [`docs/contracts/`](../../docs/contracts/).
 
 ## Status
 
-| Area | State |
-| --- | --- |
-| Schema + migrations (tenants, users, auth, locations, providers, slots, contacts, calls, appointments, idempotency, outbox, audit) | done |
-| Tenant isolation: RLS on every tenant table, service connects as a non-owner role | done |
-| Dashboard auth: login, rotating refresh tokens with reuse detection, logout, RBAC | done |
-| Internal API: service JWT + `X-Tenant-Id`/`X-Call-Id` with call-ownership check | done |
-| `GET /availability`, `GET/POST /appointments`, `POST .../reschedule`, `POST .../cancel` | done, contract-tested |
-| `appointment.booked` v1 via transactional outbox → Redis Stream `events:appointment` | done, schema-validated |
-| Dashboard slots and appointments API (`/v1/...`) | done |
-| `POST /calls`, `/calls/{id}/transfer`, `/contacts/lookup`, `/knowledge/search`, `call.ended` ingestion | next |
+| Area                                                                                                                               | State                  |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| Schema + migrations (tenants, users, auth, locations, providers, slots, contacts, calls, appointments, idempotency, outbox, audit) | done                   |
+| Tenant isolation: RLS on every tenant table, service connects as a non-owner role                                                  | done                   |
+| Dashboard auth: login, rotating refresh tokens with reuse detection, logout, RBAC                                                  | done                   |
+| Internal API: service JWT + `X-Tenant-Id`/`X-Call-Id` with call-ownership check                                                    | done                   |
+| `GET /availability`, `GET/POST /appointments`, `POST .../reschedule`, `POST .../cancel`                                            | done, contract-tested  |
+| `appointment.booked` v1 via transactional outbox → Redis Stream `events:appointment`                                               | done, schema-validated |
+| Dashboard slots and appointments API (`/v1/...`)                                                                                   | done                   |
+| `POST /calls`, `/calls/{id}/transfer`, `/contacts/lookup`, `/knowledge/search`, `call.ended` ingestion                             | next                   |
 
 ## Run locally
 
@@ -33,26 +33,51 @@ SEED_OWNER_EMAIL=you@example.com SEED_OWNER_PASSWORD='at-least-12-chars' pnpm se
 pnpm dev                                        # http://localhost:4000
 ```
 
-| Script | |
-| --- | --- |
-| `pnpm test` | unit + integration (integration needs Postgres and Redis) |
-| `pnpm test:unit` / `pnpm test:integration` | one project only |
-| `pnpm typecheck`, `pnpm lint`, `pnpm build` | CI gates |
-| `pnpm contracts:gen` | regenerate `src/contracts/generated/` from `docs/contracts/` |
-| `pnpm db:migrate:create <name>` | new SQL migration |
+| Script                                      |                                                              |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `pnpm test`                                 | unit + integration (integration needs Postgres and Redis)    |
+| `pnpm test:unit` / `pnpm test:integration`  | one project only                                             |
+| `pnpm typecheck`, `pnpm lint`, `pnpm build` | CI gates                                                     |
+| `pnpm contracts:gen`                        | regenerate `src/contracts/generated/` from `docs/contracts/` |
+| `pnpm db:migrate:create <name>`             | new SQL migration                                            |
 
 Integration tests use `TEST_DATABASE_URL` (default `postgresql://calling_agent:change_me@localhost:5432/calling_agent_test`),
-which must be a disposable database whose owner is **not** a superuser (as on RDS). Each run drops and recreates its schema.
-Redis tests use `TEST_REDIS_URL` (default db 15).
+a disposable database whose owner is **not** a superuser (as on RDS and in CI). Each run removes everything the owner
+owns (`DROP OWNED BY CURRENT_USER`) and re-applies the migrations; superuser-installed extensions such as `vector`
+are left in place. Redis tests use `TEST_REDIS_URL` (default db 15).
+
+## Migrations in production
+
+The image runs migrations itself; there is no tsx and no `.env` file in production.
+
+```bash
+node dist/scripts/migrate.js            # apply all pending migrations (what staging runs)
+node dist/scripts/migrate.js down 1     # roll back the last migration (operators only, by hand)
+```
+
+|              |                                                                                                                                                                                                                            |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Input        | `MIGRATION_DATABASE_URL` from the process environment only (schema owner, from Secrets Manager). `MIGRATION_LOCK_TIMEOUT_SEC` optional, default 600. Nothing else is read.                                                 |
+| Exit code    | `0` on success, including "schema already up to date"; `1` on any failure (bad config, unreachable database, failed SQL, lock timeout).                                                                                    |
+| Re-runs      | Safe. Applied migrations are recorded in `pgmigrations`; a re-run applies nothing and exits 0.                                                                                                                             |
+| Concurrency  | Safe. The run holds a Postgres advisory lock; a second task waits for it (logging `waiting for another migration run to finish`), then finds nothing to do. It gives up with exit 1 after `MIGRATION_LOCK_TIMEOUT_SEC`.    |
+| Atomicity    | All pending migrations run in one transaction: on failure nothing is applied.                                                                                                                                              |
+| Logs         | One JSON object per line (`service: "core-api-migrate"`, `message`, `applied`, `applied_count`, `duration_ms`, `db_host`, `db_name`). The URL and password are never logged.                                               |
+| Image layout | `apps/api/dist/scripts/migrate.js` must sit next to `apps/api/migrations/*.sql` (the script resolves `../../migrations`). `node-pg-migrate` and `pg` are runtime dependencies, so a production-only install includes them. |
+
+Staging runs it as a one-off ECS task, from the same image as the service, before each deploy:
+command `["node", "dist/scripts/migrate.js"]` with `MIGRATION_DATABASE_URL` injected as a secret. The service task
+definition must never receive `MIGRATION_DATABASE_URL`, only `DATABASE_URL` (the RLS-bound role). Deploy only if
+the task exits 0.
 
 ## Design
 
 ### Two database roles
 
-| Role | Used by | Can |
-| --- | --- | --- |
-| Schema owner (`MIGRATION_DATABASE_URL`) | migrations, seed, operators | everything; never given to the running service |
-| Login role in `api_app` (`DATABASE_URL`) | the running API | DML on tenant tables, always under RLS |
+| Role                                     | Used by                     | Can                                            |
+| ---------------------------------------- | --------------------------- | ---------------------------------------------- |
+| Schema owner (`MIGRATION_DATABASE_URL`)  | migrations, seed, operators | everything; never given to the running service |
+| Login role in `api_app` (`DATABASE_URL`) | the running API             | DML on tenant tables, always under RLS         |
 
 Every request runs in one transaction that starts with `set_config('app.tenant_id', $tenant, true)`.
 With no tenant bound, every policy is false and nothing is visible. The binding is transaction-local, so pooled
@@ -74,7 +99,8 @@ Tested with 25 concurrent callers on one slot (exactly one 201, 24 × 409) and c
 
 - `Authorization: Bearer <service JWT>`: HS256 with `SERVICE_JWT_SECRET`; `iss` in `SERVICE_JWT_ALLOWED_ISSUERS`,
   `aud = "core-api"`, `iat` and `exp` required, lifetime at most `SERVICE_JWT_MAX_TTL_SEC` (300 s).
-  **Pending Master-chat confirmation** (the contract does not define token claims or signing).
+  Confirmed by ADR 0011, which also requires one secret per issuer and a `jti` claim (not yet implemented; next task)
+  and ES256 per-service keys before staging.
 - `X-Tenant-Id` and `X-Call-Id` required; the call must belong to the tenant, otherwise `403 TENANT_MISMATCH`
   (unknown calls get the same answer, so there is no existence oracle).
 - Another tenant's slot/appointment/contact/provider gives `TENANT_MISMATCH`; truly missing gives `NOT_FOUND`.
@@ -90,7 +116,7 @@ Tested with 25 concurrent callers on one slot (exactly one 201, 24 × 409) and c
 
 `appointment.booked` v1 is validated against the frozen envelope and payload schemas, then written to the
 `outbox` table in the booking transaction and relayed to Redis Stream `events:appointment` as a single entry field
-`envelope` (JSON; field name **pending Master-chat confirmation**). Delivery is at-least-once; consumers dedupe on
+`envelope` (JSON), as fixed by ADR 0011. Delivery is at-least-once; consumers dedupe on
 `event_id`. The relay runs in every replica (`FOR UPDATE SKIP LOCKED`).
 
 ### Security notes

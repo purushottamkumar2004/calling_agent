@@ -54,7 +54,11 @@ describe('booking (bookAppointment) with double-booking protection', () => {
     });
     expect(res.status).toBe(201);
     expectContract(res.body, '/appointments', 'post', 201);
-    expect(res.body).toMatchObject({ status: 'booked', source: 'call', slot: { slot_id: f.slotIds[0], provider_name: 'Dr. Mehta' } });
+    expect(res.body).toMatchObject({
+      status: 'booked',
+      source: 'call',
+      slot: { slot_id: f.slotIds[0], provider_name: 'Dr. Mehta' },
+    });
 
     const { rows } = await ctx.owner.query(
       `SELECT a.call_id, s.status AS slot_status, c.phone_ciphertext, c.name FROM appointments a
@@ -107,7 +111,12 @@ describe('booking (bookAppointment) with double-booking protection', () => {
 
   it('books by existing contact_id', async () => {
     const r1 = await book({ slot_id: f.slotIds[4], contact: { phone: '+919800000002' } });
-    await ctx.http().post(`/internal/v1/appointments/${r1.body.appointment_id}/cancel`).set(await serviceHeaders(ctx, f)).set('Idempotency-Key', randomUUID()).send({});
+    await ctx
+      .http()
+      .post(`/internal/v1/appointments/${r1.body.appointment_id}/cancel`)
+      .set(await serviceHeaders(ctx, f))
+      .set('Idempotency-Key', randomUUID())
+      .send({});
     const r2 = await book({ slot_id: f.slotIds[4], contact: { contact_id: r1.body.contact_id } });
     expect(r2.status).toBe(201);
     expect(r2.body.contact_id).toBe(r1.body.contact_id);
@@ -126,7 +135,9 @@ describe('booking (bookAppointment) with double-booking protection', () => {
   it('allows exactly one winner when many callers race for the same slot', async () => {
     const target = f.slotIds[5];
     const results = await Promise.all(
-      Array.from({ length: 25 }, (_, i) => book({ slot_id: target, contact: { phone: `+91990000${String(i).padStart(4, '0')}` } })),
+      Array.from({ length: 25 }, (_, i) =>
+        book({ slot_id: target, contact: { phone: `+91990000${String(i).padStart(4, '0')}` } }),
+      ),
     );
     const statuses = results.map((r) => r.status).sort();
     expect(statuses.filter((s) => s === 201)).toHaveLength(1);
