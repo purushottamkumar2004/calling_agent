@@ -1,0 +1,330 @@
+openapi: 3.1.0
+info:
+  title: Core API - internal tool API
+  version: 1.0.0
+  description: >
+    Service-to-service API used by the Voice Gateway and Voice Worker.
+    Not exposed publicly. See docs/contracts/README.md for rules.
+servers:
+  - url: http://api.internal/internal/v1
+security:
+  - serviceJwt: []
+paths:
+  /calls:
+    post:
+      operationId: startCall
+      summary: Register a new call and get the agent config snapshot (called by Voice Gateway)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, provider_call_id, direction, from, to]
+              properties:
+                provider: { type: string, enum: [exotel, plivo] }
+                provider_call_id: { type: string }
+                direction: { type: string, enum: [inbound, outbound] }
+                from: { $ref: '#/components/schemas/Phone' }
+                to: { $ref: '#/components/schemas/Phone' }
+                campaign_id: { type: [string, 'null'], format: uuid }
+      responses:
+        '201':
+          description: Call registered
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [call_id, tenant_id, agent]
+                properties:
+                  call_id: { type: string, format: uuid }
+                  tenant_id: { type: string, format: uuid }
+                  agent:
+                    $ref: './agent-config.v1.schema.json'
+                  contact:
+                    oneOf:
+                      - $ref: '#/components/schemas/Contact'
+                      - type: 'null'
+        '404': { $ref: '#/components/responses/Error' }
+  /calls/{call_id}/transfer:
+    post:
+      operationId: transferToHuman
+      summary: Resolve the human handoff target for this call
+      parameters:
+        - $ref: '#/components/parameters/CallId'
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [caller_request, emergency, agent_confused, policy, error] }
+                summary: { type: string, maxLength: 500, description: One-line context for staff }
+      responses:
+        '200':
+          description: Transfer target
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [target_phone, available]
+                properties:
+                  target_phone: { $ref: '#/components/schemas/Phone' }
+                  available: { type: boolean, description: False outside staffed hours }
+                  fallback_message: { type: string }
+  /contacts/lookup:
+    get:
+      operationId: lookupContact
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CallIdHeader'
+        - in: query
+          name: phone
+          required: true
+          schema: { $ref: '#/components/schemas/Phone' }
+      responses:
+        '200':
+          description: Contact with upcoming appointments, or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contact:
+                    oneOf:
+                      - $ref: '#/components/schemas/Contact'
+                      - type: 'null'
+                  upcoming:
+                    type: array
+                    items: { $ref: '#/components/schemas/Appointment' }
+  /availability:
+    get:
+      operationId: checkAvailability
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CallIdHeader'
+        - { in: query, name: provider_id, schema: { type: string, format: uuid } }
+        - { in: query, name: specialty, schema: { type: string } }
+        - { in: query, name: location_id, schema: { type: string, format: uuid } }
+        - { in: query, name: from, required: true, schema: { type: string, format: date-time } }
+        - { in: query, name: to, required: true, schema: { type: string, format: date-time } }
+        - { in: query, name: limit, schema: { type: integer, default: 5, maximum: 20 } }
+      responses:
+        '200':
+          description: Open slots, soonest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [slots]
+                properties:
+                  slots:
+                    type: array
+                    items: { $ref: '#/components/schemas/Slot' }
+        '422': { $ref: '#/components/responses/Error' }
+  /appointments:
+    get:
+      operationId: listAppointments
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CallIdHeader'
+        - { in: query, name: contact_id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: status, schema: { type: string, enum: [upcoming, past, all], default: upcoming } }
+      responses:
+        '200':
+          description: Appointments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  appointments:
+                    type: array
+                    items: { $ref: '#/components/schemas/Appointment' }
+    post:
+      operationId: bookAppointment
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CallIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slot_id, contact]
+              properties:
+                slot_id: { type: string, format: uuid }
+                contact:
+                  type: object
+                  description: Existing contact_id, or phone + name to create one
+                  properties:
+                    contact_id: { type: string, format: uuid }
+                    phone: { $ref: '#/components/schemas/Phone' }
+                    name: { type: string, maxLength: 120 }
+                    language: { $ref: '#/components/schemas/Language' }
+                reason: { type: string, maxLength: 300, description: Caller's stated reason, non-clinical summary }
+      responses:
+        '201':
+          description: Booked
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '409': { $ref: '#/components/responses/Error' }
+  /appointments/{appointment_id}/reschedule:
+    post:
+      operationId: rescheduleAppointment
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CallIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_slot_id]
+              properties:
+                new_slot_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Rescheduled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '409': { $ref: '#/components/responses/Error' }
+  /appointments/{appointment_id}/cancel:
+    post:
+      operationId: cancelAppointment
+      parameters:
+        - $ref: '#/components/parameters/AppointmentId'
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CallIdHeader'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 300 }
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Appointment' }
+        '422': { $ref: '#/components/responses/Error' }
+  /knowledge/search:
+    post:
+      operationId: searchKnowledge
+      parameters:
+        - $ref: '#/components/parameters/TenantHeader'
+        - $ref: '#/components/parameters/CallIdHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string, maxLength: 500 }
+                language: { $ref: '#/components/schemas/Language' }
+                top_k: { type: integer, default: 3, maximum: 8 }
+      responses:
+        '200':
+          description: Relevant chunks from the tenant's knowledge base
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [doc_id, text, score]
+                      properties:
+                        doc_id: { type: string, format: uuid }
+                        title: { type: string }
+                        text: { type: string }
+                        score: { type: number }
+components:
+  securitySchemes:
+    serviceJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantHeader: { in: header, name: X-Tenant-Id, required: true, schema: { type: string, format: uuid } }
+    CallIdHeader: { in: header, name: X-Call-Id, required: true, schema: { type: string, format: uuid } }
+    IdempotencyKey: { in: header, name: Idempotency-Key, required: true, schema: { type: string, maxLength: 128 } }
+    CallId: { in: path, name: call_id, required: true, schema: { type: string, format: uuid } }
+    AppointmentId: { in: path, name: appointment_id, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Phone: { type: string, pattern: '^\+[1-9][0-9]{7,14}$' }
+    Language: { type: string, enum: [en-IN, hi-IN] }
+    Contact:
+      type: object
+      required: [contact_id, phone]
+      properties:
+        contact_id: { type: string, format: uuid }
+        phone: { $ref: '#/components/schemas/Phone' }
+        name: { type: [string, 'null'] }
+        language: { $ref: '#/components/schemas/Language' }
+        consent_outbound: { type: boolean }
+    Slot:
+      type: object
+      required: [slot_id, provider_id, provider_name, start, end]
+      properties:
+        slot_id: { type: string, format: uuid }
+        provider_id: { type: string, format: uuid }
+        provider_name: { type: string }
+        location_id: { type: string, format: uuid }
+        location_name: { type: string }
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        speakable: { type: string, description: 'Pre-formatted for TTS in the location timezone, e.g. "Friday 24 October at 4:30 PM"' }
+    Appointment:
+      type: object
+      required: [appointment_id, status, slot]
+      properties:
+        appointment_id: { type: string, format: uuid }
+        status: { type: string, enum: [booked, rescheduled, cancelled, completed, no_show] }
+        contact_id: { type: string, format: uuid }
+        slot: { $ref: '#/components/schemas/Slot' }
+        source: { type: string, enum: [call, dashboard, import] }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_ERROR, UNAUTHORIZED, TENANT_MISMATCH, NOT_FOUND, SLOT_TAKEN, OUTSIDE_HOURS, POLICY_BLOCKED, INTERNAL]
+            message: { type: string }
+            details:
+              type: object
+              properties:
+                alternatives:
+                  type: array
+                  items: { $ref: '#/components/schemas/Slot' }

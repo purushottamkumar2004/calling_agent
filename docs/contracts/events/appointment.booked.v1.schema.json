@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calling-agent/contracts/events/appointment.booked.v1.schema.json",
+  "title": "appointment.booked payload (v1)",
+  "description": "Emitted by the Core API after a booking commits (any source). Stream: events:appointment. The Scheduler uses it to send confirmations and schedule reminders.",
+  "type": "object",
+  "required": ["appointment_id", "contact_id", "phone", "slot", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "appointment_id": { "type": "string", "format": "uuid" },
+    "contact_id": { "type": "string", "format": "uuid" },
+    "phone": { "type": "string", "pattern": "^\\+[1-9][0-9]{7,14}$" },
+    "contact_name": { "type": ["string", "null"] },
+    "language": { "type": "string", "enum": ["en-IN", "hi-IN"] },
+    "slot": {
+      "type": "object",
+      "required": ["provider_name", "start", "end", "timezone"],
+      "properties": {
+        "provider_id": { "type": "string", "format": "uuid" },
+        "provider_name": { "type": "string" },
+        "location_name": { "type": "string" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "timezone": { "type": "string", "examples": ["Asia/Kolkata"] }
+      }
+    },
+    "source": { "type": "string", "enum": ["call", "dashboard", "import"] },
+    "consent_whatsapp": { "type": "boolean" }
+  }
+}

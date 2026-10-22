@@ -1,0 +1,44 @@
+{
+  "event_id": "e1000000-0000-4000-8000-000000000001",
+  "event_type": "call.ended",
+  "schema_version": 1,
+  "occurred_at": "2026-10-23T05:12:44Z",
+  "producer": "voice-worker",
+  "tenant_id": "a0b1c2d3-0000-4000-8000-0000000000aa",
+  "call_id": "c0000000-0000-4000-8000-000000000123",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "payload": {
+    "direction": "inbound",
+    "from": "+919876543210",
+    "to": "+918045678901",
+    "provider": "exotel",
+    "provider_call_id": "b3f1c9d2e4",
+    "campaign_id": null,
+    "contact_id": "c1000000-0000-4000-8000-000000000045",
+    "started_at": "2026-10-23T05:10:02Z",
+    "answered_at": "2026-10-23T05:10:03Z",
+    "ended_at": "2026-10-23T05:12:44Z",
+    "duration_sec": 161,
+    "end_reason": "caller_hangup",
+    "agent": { "agent_id": "6f1c2a10-0000-4000-8000-000000000001", "version": 3 },
+    "languages_detected": ["hi-IN", "en-IN"],
+    "transcript": {
+      "s3_key": null,
+      "turns": [
+        { "role": "agent", "text": "Hello, welcome to Sunrise Clinic. This is Asha, the clinic's AI assistant.", "language": "en-IN", "start_ms": 0, "end_ms": 3900 },
+        { "role": "caller", "text": "Mujhe kal Dr. Mehta ke saath appointment chahiye", "language": "hi-IN", "start_ms": 4800, "end_ms": 7600 }
+      ]
+    },
+    "tool_calls": [
+      { "tool_call_id": "tc_1", "name": "check_availability", "args": { "specialty": "general" }, "status": "ok", "error_code": null, "latency_ms": 142, "at_ms": 8100 },
+      { "tool_call_id": "tc_2", "name": "book_appointment", "args": { "slot_id": "51000000-0000-4000-8000-000000000777" }, "status": "ok", "error_code": null, "latency_ms": 188, "at_ms": 31200 }
+    ],
+    "outcomes": { "appointment_ids_booked": ["a1000000-0000-4000-8000-000000000999"], "appointment_ids_rescheduled": [], "appointment_ids_cancelled": [] },
+    "transfer": null,
+    "flags": { "emergency_detected": false, "ai_disclosure_played": true, "opt_out_requested": false },
+    "recording": { "s3_key": "tenants/a0b1c2d3/calls/c0000000.../recording.wav", "duration_sec": 161 },
+    "latency": { "turns": 9, "p50_ms": 840, "p95_ms": 1150, "max_ms": 1420 },
+    "usage": { "telephony_sec": 161, "stt_sec": 74, "tts_chars": 1180, "llm_input_tokens": 9200, "llm_output_tokens": 640 },
+    "error": null
+  }
+}

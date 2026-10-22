@@ -159,4 +159,4 @@ Verify legal requirements with a lawyer before launch; these are the engineering
 
 ## Decision log
 
-See [`adr/`](adr/README.md).
+See [`adr/`](adr/README.md). Service contracts: [`contracts/`](contracts/README.md).

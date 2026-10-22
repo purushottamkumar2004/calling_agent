@@ -1,0 +1,44 @@
+{
+  "agent_id": "6f1c2a10-0000-4000-8000-000000000001",
+  "version": 3,
+  "tenant_id": "a0b1c2d3-0000-4000-8000-0000000000aa",
+  "name": "Asha",
+  "template": "clinic-receptionist@1",
+  "timezone": "Asia/Kolkata",
+  "languages": { "primary": "hi-IN", "supported": ["hi-IN", "en-IN"], "auto_switch": true },
+  "greeting": {
+    "hi-IN": "नमस्ते, सनराइज़ क्लिनिक में आपका स्वागत है। मैं आशा बोल रही हूँ।",
+    "en-IN": "Hello, welcome to Sunrise Clinic. This is Asha."
+  },
+  "ai_disclosure": {
+    "enabled": true,
+    "text": {
+      "hi-IN": "मैं क्लिनिक की AI सहायक हूँ।",
+      "en-IN": "I'm the clinic's AI assistant."
+    }
+  },
+  "system_prompt": "You are Asha, the receptionist for Sunrise Clinic...",
+  "variables": { "clinic_name": "Sunrise Clinic", "consultation_fee": "INR 500" },
+  "voice": { "provider": "sarvam", "voice_ids": { "hi-IN": "hi-female-1", "en-IN": "en-female-1" }, "speed": 1.0 },
+  "stt": { "provider": "sarvam", "keywords": ["Dr. Mehta", "Sunrise"] },
+  "llm": { "provider": "anthropic", "model": "claude-haiku-5-5", "temperature": 0.3, "max_output_tokens": 250 },
+  "tools": ["lookup_contact", "check_availability", "book_appointment", "list_appointments", "reschedule_appointment", "cancel_appointment", "search_knowledge", "transfer_to_human", "end_call"],
+  "knowledge_base_ids": ["7d000000-0000-4000-8000-000000000010"],
+  "handoff": {
+    "enabled": true,
+    "on_caller_request": true,
+    "after_failed_turns": 2,
+    "unavailable_message": { "en-IN": "Our staff are unavailable right now. We'll call you back during clinic hours." }
+  },
+  "safety": {
+    "forbid_medical_advice": true,
+    "emergency": {
+      "keywords": { "en-IN": ["chest pain", "can't breathe", "unconscious", "bleeding heavily"], "hi-IN": ["सीने में दर्द", "सांस नहीं", "बेहोश"] },
+      "script": { "en-IN": "This sounds like an emergency. Please call 108 now. I'm connecting you to clinic staff." },
+      "action": "transfer"
+    }
+  },
+  "limits": { "max_duration_sec": 600, "silence_timeout_sec": 8, "max_reprompts": 2, "tool_timeout_ms": 2000, "filler_after_ms": 1000 },
+  "recording": { "enabled": true, "retention_days": 90 },
+  "post_call": { "whatsapp_confirmation": true }
+}

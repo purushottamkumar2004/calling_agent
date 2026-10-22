@@ -11,6 +11,7 @@ One file per decision, numbered in order. Decided in the Master chat, then recor
 | [0005](0005-mvp-languages.md) | MVP languages: English and Hindi | Accepted |
 | [0006](0006-telephony-exotel.md) | Telephony: Exotel, Plivo fallback | Accepted |
 | [0007](0007-cloud-aws-mumbai.md) | Cloud: AWS ap-south-1 | Accepted |
+| [0008](0008-service-contracts-v1.md) | Service contracts v1 | Accepted |
 
 ## Template
 

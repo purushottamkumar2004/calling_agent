@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calling-agent/contracts/events/call.ended.v1.schema.json",
+  "title": "call.ended payload (v1)",
+  "description": "Emitted once by the Voice Worker when a call finishes. Wrapped in the event envelope with event_type=call.ended, schema_version=1. Stream: events:call.",
+  "type": "object",
+  "required": ["direction", "from", "to", "started_at", "ended_at", "duration_sec", "end_reason", "agent", "transcript", "flags", "usage"],
+  "additionalProperties": false,
+  "$defs": {
+    "phone": { "type": "string", "pattern": "^\\+[1-9][0-9]{7,14}$" },
+    "language": { "type": "string", "enum": ["en-IN", "hi-IN"] }
+  },
+  "properties": {
+    "direction": { "type": "string", "enum": ["inbound", "outbound"] },
+    "from": { "$ref": "#/$defs/phone" },
+    "to": { "$ref": "#/$defs/phone" },
+    "provider": { "type": "string", "enum": ["exotel", "plivo"] },
+    "provider_call_id": { "type": "string" },
+    "campaign_id": { "type": ["string", "null"], "format": "uuid" },
+    "contact_id": { "type": ["string", "null"], "format": "uuid" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "answered_at": { "type": ["string", "null"], "format": "date-time" },
+    "ended_at": { "type": "string", "format": "date-time" },
+    "duration_sec": { "type": "number", "minimum": 0 },
+    "end_reason": {
+      "type": "string",
+      "enum": ["caller_hangup", "agent_hangup", "transferred", "no_answer", "busy", "voicemail", "max_duration", "silence_timeout", "error"]
+    },
+    "agent": {
+      "type": "object",
+      "required": ["agent_id", "version"],
+      "properties": {
+        "agent_id": { "type": "string", "format": "uuid" },
+        "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "languages_detected": { "type": "array", "items": { "$ref": "#/$defs/language" } },
+    "transcript": {
+      "type": "object",
+      "description": "Inline turns when under 256 KB, otherwise only s3_key",
+      "properties": {
+        "s3_key": { "type": ["string", "null"] },
+        "turns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "text", "start_ms"],
+            "properties": {
+              "role": { "type": "string", "enum": ["caller", "agent", "system"] },
+              "text": { "type": "string" },
+              "language": { "$ref": "#/$defs/language" },
+              "start_ms": { "type": "integer", "minimum": 0 },
+              "end_ms": { "type": "integer", "minimum": 0 },
+              "interrupted": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "tool_calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool_call_id", "name", "status", "latency_ms"],
+        "properties": {
+          "tool_call_id": { "type": "string" },
+          "name": { "type": "string" },
+          "args": { "type": "object" },
+          "status": { "type": "string", "enum": ["ok", "error", "timeout"] },
+          "error_code": { "type": ["string", "null"] },
+          "latency_ms": { "type": "integer", "minimum": 0 },
+          "at_ms": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "outcomes": {
+      "type": "object",
+      "description": "Facts the worker knows directly; richer tagging is done by the Post-call Worker",
+      "properties": {
+        "appointment_ids_booked": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+        "appointment_ids_rescheduled": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+        "appointment_ids_cancelled": { "type": "array", "items": { "type": "string", "format": "uuid" } }
+      }
+    },
+    "transfer": {
+      "type": ["object", "null"],
+      "properties": {
+        "reason": { "type": "string", "enum": ["caller_request", "emergency", "agent_confused", "policy", "error"] },
+        "target": { "$ref": "#/$defs/phone" },
+        "at_ms": { "type": "integer" }
+      }
+    },
+    "flags": {
+      "type": "object",
+      "required": ["emergency_detected", "ai_disclosure_played"],
+      "properties": {
+        "emergency_detected": { "type": "boolean" },
+        "ai_disclosure_played": { "type": "boolean" },
+        "opt_out_requested": { "type": "boolean" }
+      }
+    },
+    "recording": {
+      "type": ["object", "null"],
+      "properties": {
+        "s3_key": { "type": "string" },
+        "duration_sec": { "type": "number" }
+      }
+    },
+    "latency": {
+      "type": "object",
+      "description": "End of caller speech to first agent audio, per turn",
+      "properties": {
+        "turns": { "type": "integer" },
+        "p50_ms": { "type": "integer" },
+        "p95_ms": { "type": "integer" },
+        "max_ms": { "type": "integer" }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "required": ["telephony_sec"],
+      "properties": {
+        "telephony_sec": { "type": "number" },
+        "stt_sec": { "type": "number" },
+        "tts_chars": { "type": "integer" },
+        "llm_input_tokens": { "type": "integer" },
+        "llm_output_tokens": { "type": "integer" }
+      }
+    },
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
