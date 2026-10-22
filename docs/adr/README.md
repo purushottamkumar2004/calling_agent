@@ -16,6 +16,7 @@ One file per decision, numbered in order. Decided in the Master chat, then recor
 | [0010](0010-staging-and-toolchain-conventions.md) | Staging timing and toolchain conventions | Accepted |
 | [0011](0011-cross-service-conventions.md) | Cross-service conventions: service JWT, stream field, appointment events, env naming | Accepted |
 | [0012](0012-iac-tool-and-recording-retention.md) | OpenTofu everywhere; recording retention ceiling 90 days | Accepted |
+| [0013](0013-runtime-conventions.md) | Runtime conventions: ports, health checks, env names, ES256 service keys | Accepted |
 
 ## Template
 

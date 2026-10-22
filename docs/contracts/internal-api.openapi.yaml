@@ -6,7 +6,7 @@ info:
     Service-to-service API used by the Voice Gateway and Voice Worker.
     Not exposed publicly. See docs/contracts/README.md for rules.
 servers:
-  - url: http://api.internal/internal/v1
+  - url: http://api.internal:4000/internal/v1
 security:
   - serviceJwt: []
 paths:
