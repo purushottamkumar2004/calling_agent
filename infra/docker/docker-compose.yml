@@ -1,41 +1,122 @@
+# Local development stack (architecture.md: Infrastructure and scaling, "Local").
+# Run from the repo root:  pnpm infra:up   (see infra/docker/README.md)
+#
+# Profiles:
+#   (default)  postgres, redis, minio, minio-init
+#   obs        otel-lgtm: OpenTelemetry collector + Grafana, Tempo, Loki, Prometheus
+#   tunnel     ngrok, exposing the Voice Gateway (:8000) for Exotel webhooks + media WebSocket
+#
+# All ports bind to 127.0.0.1 so local data stores are never exposed on the LAN.
+
 name: calling-agent
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    # Pinned to the pgvector release we target on RDS (Postgres 16 + pgvector 0.8).
+    image: pgvector/pgvector:0.8.0-pg16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-calling_agent}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
-      POSTGRES_DB: ${POSTGRES_DB:-calling_agent}
+      # Container superuser: local admin only, never used by apps (like the RDS admin).
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:-postgres_local}
+      POSTGRES_DB: postgres
+      # Schema owner used by Core API migrations: NOT a superuser, as on RDS (init script).
+      APP_DB_OWNER: ${POSTGRES_USER:-calling_agent}
+      APP_DB_OWNER_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      APP_DB: ${POSTGRES_DB:-calling_agent}
+      APP_TEST_DB: ${POSTGRES_TEST_DB:-calling_agent_test}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Runs only when the volume is empty. After changing, run: pnpm infra:reset
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-calling_agent}"]
+      # TCP check: during init the server listens on the socket only, so this stays
+      # unhealthy until the init scripts (roles, databases) have finished.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
       interval: 5s
-      retries: 10
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
+    # AOF persistence so BullMQ jobs and Redis Streams (events:*) survive restarts.
+    # noeviction is required by BullMQ; staging ElastiCache uses the same policy.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+    # MinIO stopped publishing community images in Oct 2025 (Docker Hub and quay.io
+    # now refuse anonymous pulls), so `minio/minio` no longer works. Chainguard
+    # publishes a maintained, free MinIO build. Local dev only; staging uses AWS S3.
+    image: cgr.dev/chainguard/minio:latest
+    user: "0:0" # named volume is root-owned; avoids permission errors in local dev
+    command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - miniodata:/data
+    restart: unless-stopped
+
+  # One-shot: waits for MinIO, then creates the private recordings bucket.
+  minio-init:
+    image: amazon/aws-cli:2.17.0
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "/init/create-buckets.sh"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:-minioadmin}
+      AWS_DEFAULT_REGION: ap-south-1
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${S3_BUCKET:-recordings}
+    volumes:
+      - ./minio/create-buckets.sh:/init/create-buckets.sh:ro
+    restart: "no"
+
+  otel-lgtm:
+    profiles: ["obs"]
+    # All-in-one: OTLP collector, Grafana, Tempo (traces), Loki (logs), Prometheus.
+    # Services export OTLP to http://localhost:4317 (gRPC) or :4318 (HTTP).
+    image: grafana/otel-lgtm:latest
+    ports:
+      - "127.0.0.1:3001:3000" # Grafana (3000 is left free for the Next.js dashboard)
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    volumes:
+      - lgtmdata:/data
+    restart: unless-stopped
+
+  ngrok:
+    profiles: ["tunnel"]
+    # Public HTTPS/WSS URL for Exotel -> Voice Gateway running on the host (:8000).
+    # Needs NGROK_AUTHTOKEN in .env. Inspector: http://localhost:4040
+    image: ngrok/ngrok:latest
+    command: ["http", "host.docker.internal:${VOICE_GATEWAY_PORT:-8000}"]
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:4040:4040"
+    restart: unless-stopped
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
+  lgtmdata:

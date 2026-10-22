@@ -3,7 +3,12 @@
   "private": true,
   "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "infra:up": "docker compose -f infra/docker/docker-compose.yml up -d",
-    "infra:down": "docker compose -f infra/docker/docker-compose.yml down"
+    "infra:up": "docker compose --env-file .env -f infra/docker/docker-compose.yml up -d --wait postgres redis minio && docker compose --env-file .env -f infra/docker/docker-compose.yml run --rm minio-init",
+    "infra:obs": "docker compose --env-file .env -f infra/docker/docker-compose.yml --profile obs up -d otel-lgtm",
+    "infra:tunnel": "docker compose --env-file .env -f infra/docker/docker-compose.yml --profile tunnel up -d ngrok",
+    "infra:down": "docker compose --env-file .env -f infra/docker/docker-compose.yml --profile obs --profile tunnel down",
+    "infra:reset": "docker compose --env-file .env -f infra/docker/docker-compose.yml --profile obs --profile tunnel down -v",
+    "infra:logs": "docker compose --env-file .env -f infra/docker/docker-compose.yml logs -f",
+    "contracts:check": "uv run --no-project --with \"jsonschema[format]==4.23.0\" --with \"openapi-spec-validator==0.7.1\" infra/scripts/validate_contracts.py"
   }
 }
